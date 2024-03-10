@@ -1,7 +1,9 @@
-﻿namespace VaultPreviewLambda.Models;
+﻿using System.Text.Json.Serialization;
+
+namespace VaultPreviewLambda.Models;
 
 public class DungeonRun
 {
-    public int Level { get; set; }
-    public string Name { get; set; }
+    [JsonPropertyName("level")] public int Level { get; set; }
+    [JsonPropertyName("name")] public string Name { get; set; }
 }

@@ -1,9 +1,14 @@
-﻿namespace VaultPreviewLambda.Models;
+﻿using System.Text.Json.Serialization;
 
-public class BossProgress
+namespace VaultPreviewLambda.Models;
+
+public class BossProgress : Dictionary<string, bool>
 {
-    public bool Mythic { get; set; }
-    public bool Heroic { get; set; }
-    public bool Normal { get; set; }
-    public bool Lfr { get; set; }
+    public BossProgress()
+    {
+        Add("mythic", false);
+        Add("heroic", false);
+        Add("normal", false);
+        Add("lfr", false);
+    }
 }

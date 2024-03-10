@@ -2,12 +2,14 @@
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Serialization;
+using VaultPreviewLambda.Models.Blizzard;
 
 namespace VaultPreviewLambda;
 
 public interface IBlizzardApiHandler
 {
     Task Connect();
+    Task<BlizzardEncounterResponse> GetEncounters(string realm, string character);
 }
 
 public class TokenResponse
@@ -24,6 +26,7 @@ public class BlizzardApiHandler(
     : IBlizzardApiHandler
 {
     private string? _token;
+    private HttpClient? _client;
 
     public async Task Connect()
     {
@@ -60,6 +63,32 @@ public class BlizzardApiHandler(
             await secretHandler.PutSecret("/Blizzard/Token", _token);
             await secretHandler.PutSecret("/Blizzard/TokenExpires", expires.ToUnixTimeMilliseconds());
         }
+    }
+
+    public async Task<BlizzardEncounterResponse> GetEncounters(string realm, string character)
+    {
+        HttpClient client = _getOrCreateClient();
+
+        BlizzardEncounterResponse? response = await client.GetFromJsonAsync<BlizzardEncounterResponse>(
+            $"/profile/wow/character/{realm}/{character}/encounters/raids?namespace=profile-us&locale=en_US");
+
+        return response ?? new BlizzardEncounterResponse();
+    }
+
+    private HttpClient _getOrCreateClient()
+    {
+        if (string.IsNullOrEmpty(_token))
+            throw new MissingFieldException(nameof(BlizzardApiHandler), nameof(_token));
+
+        if (_client != null)
+            return _client;
+
+        _client = clientFactory.CreateClient();
+        
+        _client.DefaultRequestHeaders.Add("Authorization", $"Bearer {_token}");
+        _client.BaseAddress = new Uri("https://us.api.blizzard.com");
+
+        return _client;
     }
 
     private static string _Base64Encode(string plainText)

@@ -11,7 +11,7 @@
   "template": "serverless.template",
   "function-architecture": "x86_64",
   "function-runtime": "dotnet8",
-  "function-memory-size": 512,
+  "function-memory-size": 1024,
   "function-timeout": 30,
   "function-handler": "VaultPreviewLambda::VaultPreviewLambda.Function::FunctionHandler"
 }

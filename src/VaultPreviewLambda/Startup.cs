@@ -9,6 +9,7 @@ public class Startup
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IBlizzardApiHandler, BlizzardApiHandler>();
+        services.AddSingleton<IRaiderIoHandler, RaiderIoHandler>();
         services.AddSingleton<ISecretHandler, SecretHandler>();
         services.AddHttpClient();
     }
