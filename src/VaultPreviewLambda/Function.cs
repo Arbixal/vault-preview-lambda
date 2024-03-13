@@ -4,6 +4,8 @@ using Amazon.Lambda.Core;
 using VaultPreviewLambda.Models;
 using VaultPreviewLambda.Models.Blizzard;
 using VaultPreviewLambda.Models.RaiderIo;
+using VaultShared;
+using VaultShared.Models.Blizzard;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
@@ -27,42 +29,37 @@ public class Function
     /// <summary>
     /// A simple function that takes a string and does a ToUpper
     /// </summary>
-    /// <param name="characters">Comma-separated list of characters (e.g. bixshift-nagrand,bixsham-nagrand,bixmonk-nagrand)</param>
+    /// <param name="region">The region the character belongs to ("us", "eu", "kr", etc)</param>
+    /// <param name="realm">The name of the realm that the character belongs to</param>
+    /// <param name="character">The name of the character</param>
     /// <returns></returns>
     [LambdaFunction]
-    [HttpApi(LambdaHttpMethod.Get,"/vault-progress/{characters}")]
-    public async Task<IDictionary<string, CharacterProgress>> FunctionHandler(string characters)
+    [HttpApi(LambdaHttpMethod.Get,"/vault-progress/{region}/{realm}/{character}")]
+    public async Task<IDictionary<string, CharacterProgress>> FunctionHandler(string region, string realm, string character)
     {
         Dictionary<string, CharacterProgress> progress = new Dictionary<string, CharacterProgress>();
 
-        if (string.IsNullOrEmpty(characters))
+        if (string.IsNullOrEmpty(region) || string.IsNullOrEmpty(realm) || string.IsNullOrEmpty(character))
         {
             return progress;
         }
         
         await _blizzardApiHandler.Connect();
         
-        string[] characterList = characters.Split(",", StringSplitOptions.TrimEntries);
+        CharacterProgress characterProgress = new CharacterProgress();
+        
+        Console.WriteLine($"{character} from {realm}");
 
-        foreach (string aCharacter in characterList)
-        {
-            CharacterProgress characterProgress = new CharacterProgress();
-            
-            string[] characterSplit = aCharacter.Split("-");
-            
-            Console.WriteLine($"{characterSplit[0]} from {characterSplit[1]}");
+        characterProgress.Raid = await _getBlizzardRaidData(region, realm, character);
 
-            characterProgress.Raid = await _getBlizzardRaidData(characterSplit[1], characterSplit[0]);
-
-            characterProgress.Dungeons = await _getRaiderIoMythicPlusData(characterSplit[1], characterSplit[0]);
-            
-            progress.Add(aCharacter, characterProgress);
-        }
+        (characterProgress.PlayerClass, characterProgress.Dungeons) = await _getRaiderIoMythicPlusData(region, realm, character);
+        
+        progress.Add($"{character}-{realm}", characterProgress);
 
         return progress;
     }
 
-    private async Task<IDictionary<string, BossProgress>> _getBlizzardRaidData(string realm, string character)
+    private async Task<IDictionary<string, BossProgress>> _getBlizzardRaidData(string region, string realm, string character)
     {
         const string EXPANSION = "Current Season";
         const int INSTANCE = 1207; // Amirdrassil
@@ -78,7 +75,7 @@ public class Function
         }
         
         BlizzardEncounterResponse response =
-            await _blizzardApiHandler.GetEncounters(realm, character);
+            await _blizzardApiHandler.GetEncounters(region, realm, character);
             
         Console.WriteLine($"Expansions: {response.Expansions.Count}");
         BlizzardExpansion? currentExpansion = response.Expansions.FirstOrDefault(x => x.Expansion.Name == EXPANSION);
@@ -114,12 +111,20 @@ public class Function
         return result;
     }
 
-    private async Task<IList<DungeonRun>> _getRaiderIoMythicPlusData(string realm, string character)
+    private async Task<(string, IList<DungeonRun>)> _getRaiderIoMythicPlusData(string region, string realm, string character)
     {
-        IList<RaiderIoDungeonRun> response = await _raiderIoHandler.GetWeeklyHighestLevelRuns(realm, character);
+        RaiderIoProfileResponse response = await _raiderIoHandler.GetWeeklyHighestLevelRuns(region, realm, character);
 
-        return response.Select(x => new DungeonRun() { Level = x.MythicLevel, Name = x.Dungeon })
-            .ToList();
+        IEnumerable<DungeonRun> weeklyRuns =
+            response.WeeklyHighestLevelRuns?.Select(x => new DungeonRun() { Level = x.MythicLevel, Name = x.Dungeon })
+            ?? new List<DungeonRun>();
+
+        return (_trimClassName(response.Class), weeklyRuns.ToList());
+    }
+
+    private static string _trimClassName(string className)
+    {
+        return className.Replace(" ", "").ToLower();
     }
 
     private static string _trimBossName(string bossName)

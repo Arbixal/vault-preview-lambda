@@ -1,7 +1,7 @@
 ﻿using Amazon.SimpleSystemsManagement;
 using Amazon.SimpleSystemsManagement.Model;
 
-namespace VaultPreviewLambda;
+namespace VaultShared;
 
 public interface ISecretHandler
 {

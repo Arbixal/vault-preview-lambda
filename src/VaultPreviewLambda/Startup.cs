@@ -1,5 +1,6 @@
 ﻿using Amazon.Lambda.Annotations;
 using Microsoft.Extensions.DependencyInjection;
+using VaultShared;
 
 namespace VaultPreviewLambda;
 

@@ -1,23 +1,15 @@
-﻿using System.Net.Http.Headers;
-using System.Net.Http.Json;
+﻿using System.Net.Http.Json;
 using System.Text;
-using System.Text.Json.Serialization;
 using VaultPreviewLambda.Models.Blizzard;
+using VaultShared;
+using VaultShared.Models.Blizzard;
 
 namespace VaultPreviewLambda;
 
 public interface IBlizzardApiHandler
 {
     Task Connect();
-    Task<BlizzardEncounterResponse> GetEncounters(string realm, string character);
-}
-
-public class TokenResponse
-{
-    [JsonPropertyName("access_token")] public string AccessToken { get; set; }
-    [JsonPropertyName("token_type")] public string TokenType { get; set; }
-    [JsonPropertyName("expires_in")] public int ExpiresIn { get; set; }
-    [JsonPropertyName("sub")] public string Sub { get; set; }
+    Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character);
 }
 
 public class BlizzardApiHandler(
@@ -27,6 +19,15 @@ public class BlizzardApiHandler(
 {
     private string? _token;
     private HttpClient? _client;
+
+    private readonly IDictionary<string, string> _baseUrlByRegion = new Dictionary<string, string>()
+    {
+        {"us", "https://us.api.blizzard.com"},
+        {"eu", "https://eu.api.blizzard.com"},
+        {"kr", "https://kr.api.blizzard.com"},
+        {"tw", "https://tw.api.blizzard.com"},
+        {"cn", "https://gateway.battlenet.com.cn"},
+    };
 
     public async Task Connect()
     {
@@ -65,9 +66,12 @@ public class BlizzardApiHandler(
         }
     }
 
-    public async Task<BlizzardEncounterResponse> GetEncounters(string realm, string character)
+    public async Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character)
     {
-        HttpClient client = _getOrCreateClient();
+        if (!_baseUrlByRegion.ContainsKey(region.ToLower()))
+            throw new ArgumentOutOfRangeException(nameof(region), "Region must be one of us, eu, kr, tw, or cn");
+        
+        HttpClient client = _getOrCreateClient(region.ToLower());
 
         BlizzardEncounterResponse? response = await client.GetFromJsonAsync<BlizzardEncounterResponse>(
             $"/profile/wow/character/{realm}/{character}/encounters/raids?namespace=profile-us&locale=en_US");
@@ -75,7 +79,7 @@ public class BlizzardApiHandler(
         return response ?? new BlizzardEncounterResponse();
     }
 
-    private HttpClient _getOrCreateClient()
+    private HttpClient _getOrCreateClient(string region)
     {
         if (string.IsNullOrEmpty(_token))
             throw new MissingFieldException(nameof(BlizzardApiHandler), nameof(_token));
@@ -86,7 +90,7 @@ public class BlizzardApiHandler(
         _client = clientFactory.CreateClient();
         
         _client.DefaultRequestHeaders.Add("Authorization", $"Bearer {_token}");
-        _client.BaseAddress = new Uri("https://us.api.blizzard.com");
+        _client.BaseAddress = new Uri(_baseUrlByRegion[region]);
 
         return _client;
     }

@@ -1,4 +1,6 @@
-﻿namespace VaultPreviewLambda.Models.Blizzard;
+﻿using VaultShared.Models.Blizzard;
+
+namespace VaultPreviewLambda.Models.Blizzard;
 
 public class BlizzardInstance
 {
