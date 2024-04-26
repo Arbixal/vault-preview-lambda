@@ -4,8 +4,6 @@ using Amazon.Lambda.Core;
 using VaultPreviewLambda.Models;
 using VaultPreviewLambda.Models.Blizzard;
 using VaultPreviewLambda.Models.RaiderIo;
-using VaultShared;
-using VaultShared.Models.Blizzard;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
@@ -62,8 +60,16 @@ public class Function
     private async Task<IDictionary<string, BossProgress>> _getBlizzardRaidData(string region, string realm, string character)
     {
         const string EXPANSION = "Current Season";
-        const int INSTANCE = 1207; // Amirdrassil
-        string[] BOSSES = { "gnarlroot", "igira-the-cruel", "volcoross", "council-of-dreams", "larodar", "nymue", "smolderon", "tindral-sageswift", "fyrakk-the-blazing" };
+        const int AMIRDRASSIL_INSTANCE = 1207; // Amirdrassil
+        const int VAULT_INSTANCE = 1200; // Vault of the Incarnates
+        const int ABERRUS_INSTANCE = 1208; // Aberrus
+        string[] BOSSES =
+        {
+            "gnarlroot", "igira-the-cruel", "volcoross", "council-of-dreams", "larodar", "nymue", "smolderon", "tindral-sageswift", "fyrakk-the-blazing",
+            "eranog", "terros", "the-primal-council", "sennarth", "dathea", "kurog-grimtotem", "broodkeeper-diurna", "raszageth-the-storm-eater",
+            "kazzara", "the-amalgamation-chamber", "the-forgotten-experiments", "assault-of-the-zaqali", "rashok", "the-vigilant-steward", "magmorax", 
+            "echo-of-neltharion", "scalecommander-sarkareth"
+        };
         DateTimeOffset compareDate = _getLastTuesday();
 
         IDictionary<string, BossProgress> result = new Dictionary<string, BossProgress>();
@@ -87,7 +93,7 @@ public class Function
         }
             
         Console.WriteLine($"Instances: {currentExpansion.Instances.Count}");
-        BlizzardInstance? currentInstance = currentExpansion.Instances.FirstOrDefault(x => x.Instance.Id == INSTANCE);
+        BlizzardInstance? currentInstance = currentExpansion.Instances.FirstOrDefault(x => x.Instance.Id is AMIRDRASSIL_INSTANCE or VAULT_INSTANCE or ABERRUS_INSTANCE);
 
         if (currentInstance == null)
         {
@@ -139,7 +145,13 @@ public class Function
 
     private static DateTimeOffset _getLastTuesday()
     {
-        DateTimeOffset lastTuesday = DateTimeOffset.Now.AddDays(-1);
+        DateTimeOffset today = DateTimeOffset.UtcNow;
+        if (today is { DayOfWeek: DayOfWeek.Tuesday, Hour: >= 15 })
+        {
+            return new DateTimeOffset(today.Year, today.Month, today.Day, 15, 0, 0, TimeSpan.Zero);
+        }
+        
+        DateTimeOffset lastTuesday = DateTimeOffset.UtcNow.AddDays(-1);
         while (lastTuesday.DayOfWeek != DayOfWeek.Tuesday)
             lastTuesday = lastTuesday.AddDays(-1);
 
