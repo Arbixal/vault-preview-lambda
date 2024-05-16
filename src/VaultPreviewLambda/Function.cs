@@ -93,23 +93,23 @@ public class Function
         }
             
         Console.WriteLine($"Instances: {currentExpansion.Instances.Count}");
-        BlizzardInstance? currentInstance = currentExpansion.Instances.FirstOrDefault(x => x.Instance.Id is AMIRDRASSIL_INSTANCE or VAULT_INSTANCE or ABERRUS_INSTANCE);
-
-        if (currentInstance == null)
+        foreach (BlizzardInstance currentInstance in currentExpansion.Instances)
         {
-            // Return blank boss progress
-            return result;
-        }
-        
-        Console.WriteLine($"Current Raid: {currentInstance.Instance.Name}");
-        foreach (BlizzardMode mode in currentInstance.Modes)
-        {
-            foreach (BlizzardEncounter encounter in mode.Progress.Encounters)
+            if (currentInstance.Instance.Id != AMIRDRASSIL_INSTANCE 
+                && currentInstance.Instance.Id != VAULT_INSTANCE 
+                && currentInstance.Instance.Id != ABERRUS_INSTANCE)
+                continue;
+            
+            Console.WriteLine($"Current Raid: {currentInstance.Instance.Name}");
+            foreach (BlizzardMode mode in currentInstance.Modes)
             {
-                DateTimeOffset lastKill = DateTimeOffset.UnixEpoch.AddMilliseconds(encounter.LastKillTimestamp);
-                if (lastKill > compareDate)
+                foreach (BlizzardEncounter encounter in mode.Progress.Encounters)
                 {
-                    result[_trimBossName(encounter.Encounter.Name)][mode.Difficulty.Type.ToLower()] = true;
+                    DateTimeOffset lastKill = DateTimeOffset.UnixEpoch.AddMilliseconds(encounter.LastKillTimestamp);
+                    if (lastKill > compareDate)
+                    {
+                        result[_trimBossName(encounter.Encounter.Name)][mode.Difficulty.Type.ToLower()] = true;
+                    }
                 }
             }
         }
