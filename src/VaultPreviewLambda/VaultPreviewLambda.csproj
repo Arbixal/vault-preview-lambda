@@ -20,7 +20,6 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\VaultShared\VaultShared.csproj" />
     <ProjectReference Include="..\VaultShared\VaultShared.csproj" />
   </ItemGroup>
 </Project>

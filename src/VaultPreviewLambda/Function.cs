@@ -47,8 +47,10 @@ public class Function
         CharacterProgress characterProgress = new CharacterProgress();
         
         Console.WriteLine($"{character} from {realm}");
+        
+        characterProgress.Season = await _blizzardApiHandler.GetSeason(region);
 
-        characterProgress.Raid = await _getBlizzardRaidData(region, realm, character);
+        characterProgress.Raid = await _getBlizzardRaidData(region, realm, character, characterProgress.Season);
 
         (characterProgress.PlayerClass, characterProgress.Dungeons) = await _getRaiderIoMythicPlusData(region, realm, character);
         
@@ -57,25 +59,68 @@ public class Function
         return progress;
     }
 
-    private async Task<IDictionary<string, BossProgress>> _getBlizzardRaidData(string region, string realm, string character)
+    private async Task<IDictionary<string, BossProgress>> _getBlizzardRaidData(string region, string realm, string character, int? currentSeason)
     {
         const string EXPANSION = "Current Season";
         const int AMIRDRASSIL_INSTANCE = 1207; // Amirdrassil
         const int VAULT_INSTANCE = 1200; // Vault of the Incarnates
         const int ABERRUS_INSTANCE = 1208; // Aberrus
-        string[] BOSSES =
-        {
-            "gnarlroot", "igira-the-cruel", "volcoross", "council-of-dreams", "larodar", "nymue", "smolderon", "tindral-sageswift", "fyrakk-the-blazing",
-            "eranog", "terros", "the-primal-council", "sennarth", "dathea", "kurog-grimtotem", "broodkeeper-diurna", "raszageth-the-storm-eater",
+        const int NERUBAR_PALACE = 1273; // Nerubar Palace
+        const int UNDERMINE = 1296; // Liberation of Undermine
+        string[] AMIRDRASSIL_BOSSES =
+        [
+            "gnarlroot", "igira-the-cruel", "volcoross", "council-of-dreams", "larodar", "nymue", "smolderon", "tindral-sageswift", "fyrakk-the-blazing"
+        ];
+
+        string[] VAULT_BOSSES =
+        [
+            "eranog", "terros", "the-primal-council", "sennarth", "dathea", "kurog-grimtotem", "broodkeeper-diurna", "raszageth-the-storm-eater"
+        ];
+
+        string[] ABERRUS_BOSSES =
+        [
             "kazzara", "the-amalgamation-chamber", "the-forgotten-experiments", "assault-of-the-zaqali", "rashok", "the-vigilant-steward", "magmorax", 
             "echo-of-neltharion", "scalecommander-sarkareth"
+        ];
+
+        string[] NERUBAR_BOSSES =
+        [
+            "ulgrax-the-devourer", "the-bloodbound-horror", "sikran", "rashanan", "broodtwister-ovinax", "nexus-princess-kyveza", "the-silken-court", "queen-ansurek"
+        ];
+
+        string[] UNDERMINE_BOSSES =
+        [
+            "vexie-and-the-geargrinders", "cauldron-of-carnage", "rik-reverb", "stix-bunkjunker", "sprocketmonger-lockenstock", "the-one-armed-bandit", "mugzee", "chrome-king-gallywix"
+        ];
+
+        Dictionary<int, string[]> bossList = new Dictionary<int, string[]>
+        {
+            [9] = VAULT_BOSSES,
+            [10] = ABERRUS_BOSSES,
+            [11] = AMIRDRASSIL_BOSSES,
+            [12] = [.. AMIRDRASSIL_BOSSES, .. VAULT_BOSSES, .. ABERRUS_BOSSES],
+            [13] = NERUBAR_BOSSES,
+            [14] = UNDERMINE_BOSSES
         };
+
+        Dictionary<int, int[]> instanceList = new Dictionary<int, int[]>
+        {
+            [9] = [VAULT_INSTANCE],
+            [10] = [ABERRUS_INSTANCE],
+            [11] = [AMIRDRASSIL_INSTANCE],
+            [12] = [VAULT_INSTANCE, ABERRUS_INSTANCE, AMIRDRASSIL_INSTANCE],
+            [13] = [NERUBAR_PALACE],
+            [14] = [UNDERMINE]
+        };
+        
         DateTimeOffset compareDate = _getLastTuesday();
 
         IDictionary<string, BossProgress> result = new Dictionary<string, BossProgress>();
 
+        string[] bosses = (currentSeason.HasValue ? bossList.GetValueOrDefault(currentSeason.Value) : []) ?? [];
+
         // Seed data
-        foreach (string aBoss in BOSSES)
+        foreach (string aBoss in bosses)
         {
             result.Add(aBoss, new BossProgress());
         }
@@ -95,9 +140,9 @@ public class Function
         Console.WriteLine($"Instances: {currentExpansion.Instances.Count}");
         foreach (BlizzardInstance currentInstance in currentExpansion.Instances)
         {
-            if (currentInstance.Instance.Id != AMIRDRASSIL_INSTANCE 
-                && currentInstance.Instance.Id != VAULT_INSTANCE 
-                && currentInstance.Instance.Id != ABERRUS_INSTANCE)
+            int[] instances = (currentSeason.HasValue ? instanceList.GetValueOrDefault(currentSeason.Value) : []) ?? [];
+
+            if (instances.All(x => x != currentInstance.Instance.Id))
                 continue;
             
             Console.WriteLine($"Current Raid: {currentInstance.Instance.Name}");

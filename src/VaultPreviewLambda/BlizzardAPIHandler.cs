@@ -10,6 +10,8 @@ public interface IBlizzardApiHandler
 {
     Task Connect();
     Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character);
+
+    Task<int?> GetSeason(string region);
 }
 
 public class BlizzardApiHandler(
@@ -77,6 +79,19 @@ public class BlizzardApiHandler(
             $"/profile/wow/character/{realm}/{character}/encounters/raids?namespace=profile-us&locale=en_US");
 
         return response ?? new BlizzardEncounterResponse();
+    }
+
+    public async Task<int?> GetSeason(string region)
+    {
+        if (!_baseUrlByRegion.ContainsKey(region.ToLower()))
+            throw new ArgumentOutOfRangeException(nameof(region), "Region must be one of us, eu, kr, tw, or cn");
+        
+        HttpClient client = _getOrCreateClient(region.ToLower());
+
+        BlizzardSeasonResponse? response = await client.GetFromJsonAsync<BlizzardSeasonResponse>(
+            $"/data/wow/mythic-keystone/season/index?namespace=dynamic-us&locale=en_US");
+
+        return response?.CurrentSeason.Id;
     }
 
     private HttpClient _getOrCreateClient(string region)
