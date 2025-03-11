@@ -3,18 +3,15 @@
   "Transform": "AWS::Serverless-2016-10-31",
   "Description": "This template is partially managed by Amazon.Lambda.Annotations (v1.2.0.0).",
   "Resources": {
-    "VaultPreviewLambdaFunctionFunctionHandlerGenerated": {
+    "CharacterDataLambdaFunctionFunctionHandlerGenerated": {
       "Type": "AWS::Serverless::Function",
       "Metadata": {
-        "Tool": "Amazon.Lambda.Annotations",
-        "SyncedEvents": [
-          "RootGet"
-        ]
+        "Tool": "Amazon.Lambda.Annotations"
       },
       "Properties": {
         "Runtime": "dotnet8",
         "CodeUri": ".",
-        "MemorySize": 1024,
+        "MemorySize": 256,
         "Timeout": 30,
         "Policies": [
           "AWSLambdaBasicExecutionRole",
@@ -29,13 +26,12 @@
           }
         ],
         "PackageType": "Zip",
-        "Handler": "VaultPreviewLambda::VaultPreviewLambda.Function_FunctionHandler_Generated::FunctionHandler",
+        "Handler": "CharacterDataLambda::CharacterDataLambda.Function_FunctionHandler_Generated::FunctionHandler",
         "Events": {
-          "RootGet": {
-            "Type": "HttpApi",
+          "ScheduledEvent": {
+            "Type": "Schedule",
             "Properties": {
-              "Path": "/vault-progress/{region}/{realm}/{character}",
-              "Method": "GET"
+              "Schedule": "cron(0 15 ? * TUE *)"
             }
           }
         }

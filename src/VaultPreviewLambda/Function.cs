@@ -1,9 +1,13 @@
 using Amazon.Lambda.Annotations;
 using Amazon.Lambda.Annotations.APIGateway;
 using Amazon.Lambda.Core;
+using VaultPreview.Blizzard;
+using VaultPreview.Blizzard.Models;
+using VaultPreview.RaiderIo;
+using VaultPreview.RaiderIo.Models;
+using VaultPreview.VaultCache;
+using VaultPreview.VaultCache.Models;
 using VaultPreviewLambda.Models;
-using VaultPreviewLambda.Models.Blizzard;
-using VaultPreviewLambda.Models.RaiderIo;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
@@ -14,14 +18,17 @@ public class Function
 {
     private readonly IBlizzardApiHandler _blizzardApiHandler;
     private readonly IRaiderIoHandler _raiderIoHandler;
+    private readonly IVaultCacheHandler _vaultCacheHandler;
 
     public Function(
         IBlizzardApiHandler blizzardApiHandler,
-        IRaiderIoHandler raiderIoHandler
+        IRaiderIoHandler raiderIoHandler,
+        IVaultCacheHandler vaultCacheHandler
         )
     {
         _blizzardApiHandler = blizzardApiHandler;
         _raiderIoHandler = raiderIoHandler;
+        _vaultCacheHandler = vaultCacheHandler;
     }
     
     /// <summary>
@@ -51,6 +58,8 @@ public class Function
         characterProgress.Season = await _blizzardApiHandler.GetSeason(region);
 
         characterProgress.Raid = await _getBlizzardRaidData(region, realm, character, characterProgress.Season);
+
+        characterProgress.Delves = await _getDelveData(region, realm, character);
 
         (characterProgress.PlayerClass, characterProgress.Dungeons) = await _getRaiderIoMythicPlusData(region, realm, character);
         
@@ -90,7 +99,7 @@ public class Function
 
         string[] UNDERMINE_BOSSES =
         [
-            "vexie-and-the-geargrinders", "cauldron-of-carnage", "rik-reverb", "stix-bunkjunker", "sprocketmonger-lockenstock", "the-one-armed-bandit", "mugzee", "chrome-king-gallywix"
+            "vexie-and-the-geargrinders", "cauldron-of-carnage", "rik-reverb", "stix-bunkjunker", "sprocketmonger-lockenstock", "the-one-armed-bandit", "mug'zee", "chrome-king-gallywix"
         ];
 
         Dictionary<int, string[]> bossList = new Dictionary<int, string[]>
@@ -171,6 +180,48 @@ public class Function
             ?? new List<DungeonRun>();
 
         return (_trimClassName(response.Class), weeklyRuns.ToList());
+    }
+
+    private async Task<Dictionary<int, int>> _getDelveData(string region, string realm, string character)
+    {
+        Dictionary<int, int> delveData = new Dictionary<int, int>
+        {
+            [1] = 0,
+            [2] = 0,
+            [3] = 0,
+            [4] = 0,
+            [5] = 0,
+            [6] = 0,
+            [7] = 0,
+            [8] = 0,
+            [9] = 0,
+            [10] = 0,
+            [11] = 0,
+        };
+        
+        CharacterData? characterData = await _vaultCacheHandler.GetCharacter(region, realm, character);
+        
+        Dictionary<int,int> delveStatistics = await _blizzardApiHandler.GetDelveStatistics(region, realm, character);
+        
+        if (characterData == null)
+        {
+            Console.WriteLine("characterData doesn't exist");
+            // Doesn't exist, should create it and save it
+            characterData = new CharacterData(character, realm, region);
+            characterData.SetDelveData(delveStatistics);
+
+            await _vaultCacheHandler.SaveCharacter(characterData);
+            return delveData;
+        }
+
+        for (int i = 1; i <= 11; ++i)
+        {
+            delveData[i] = Math.Max(0, delveStatistics[i] - characterData.DelvesCompleted[i]);
+            
+            Console.WriteLine($"Delve {i}: {delveStatistics[i]} - {characterData.DelvesCompleted[i]} = {delveData[i]}");
+        }
+
+        return delveData;
     }
 
     private static string _trimClassName(string className)
