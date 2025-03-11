@@ -11,10 +11,11 @@ public class CharacterData
 
     public DateTimeOffset LastUpdated => DateTimeOffset.FromUnixTimeMilliseconds(LastUpdatedTimestamp);
 
-    public bool NeedsUpdating => !string.IsNullOrEmpty(Name)
-                                 && !string.IsNullOrEmpty(Realm)
-                                 && !string.IsNullOrEmpty(Region)
-                                 && LastUpdated < DateTimeOffset.UtcNow.Subtract(TimeSpan.FromDays(6));
+    public bool IsValid => !string.IsNullOrEmpty(Name)
+                           && !string.IsNullOrEmpty(Realm)
+                           && !string.IsNullOrEmpty(Region);
+
+    public string FullName => $"{Name}-{Realm} ({Region})";
     #endregion
     
     #region Delve Information

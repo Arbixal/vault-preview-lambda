@@ -48,7 +48,7 @@ public class VaultCacheHandler(IAmazonS3 s3Client) : IVaultCacheHandler
 
             foreach (S3Object aFile in listResponse.S3Objects)
             {
-                string[] characterParts = aFile.Key.Split("-");
+                string[] characterParts = aFile.Key.Replace(".json", "").Split("-");
                 if (characterParts.Length != 3)
                     continue;
                 

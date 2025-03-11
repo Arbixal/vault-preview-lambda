@@ -51,15 +51,20 @@ public class Function
 
         foreach (CharacterData characterData in characterList)
         {
-            if (!characterData.NeedsUpdating)
+            if (!characterData.IsValid)
+            {
+                Console.WriteLine($"Character '{characterData.FullName}' is not valid.");
                 continue;
-            
+            }
+
+            Console.WriteLine($"Getting data for Character '{characterData.FullName}'.");
             Dictionary<int,int> response = 
                 await _blizzardApiHandler.GetDelveStatistics(characterData.Region, characterData.Realm, characterData.Name);
 
             characterData.SetDelveData(response);
             
             // Save to S3
+            Console.WriteLine($"Saving Character '{characterData.FullName}'.");
             await _vaultCacheHandler.SaveCharacter(characterData);
         }
 

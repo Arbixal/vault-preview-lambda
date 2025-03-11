@@ -20,8 +20,19 @@
             "Statement": {
               "Sid": "S3AccessStatement",
               "Effect": "Allow",
-              "Action": "s3:*",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject"
+              ],
               "Resource": "arn:aws:s3:::vault-preview-data/*"
+            }
+          },
+          {
+            "Statement": {
+              "Sid": "S3ListStatement",
+              "Effect": "Allow",
+              "Action": "s3:ListBucket",
+              "Resource": "arn:aws:s3:::vault-preview-data"
             }
           }
         ],
@@ -31,7 +42,8 @@
           "ScheduledEvent": {
             "Type": "Schedule",
             "Properties": {
-              "Schedule": "cron(0 15 ? * TUE *)"
+              "Schedule": "cron(0 15 ? * TUE *)",
+              "Input": "\"\""
             }
           }
         }
