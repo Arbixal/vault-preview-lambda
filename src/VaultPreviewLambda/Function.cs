@@ -76,6 +76,7 @@ public class Function
         const int ABERRUS_INSTANCE = 1208; // Aberrus
         const int NERUBAR_PALACE = 1273; // Nerubar Palace
         const int UNDERMINE = 1296; // Liberation of Undermine
+        const int MANAFORGE = 1302; // Manaforge Omega
         string[] AMIRDRASSIL_BOSSES =
         [
             "gnarlroot", "igira-the-cruel", "volcoross", "council-of-dreams", "larodar", "nymue", "smolderon", "tindral-sageswift", "fyrakk-the-blazing"
@@ -102,6 +103,11 @@ public class Function
             "vexie-and-the-geargrinders", "cauldron-of-carnage", "rik-reverb", "stix-bunkjunker", "sprocketmonger-lockenstock", "the-one-armed-bandit", "mug'zee", "chrome-king-gallywix"
         ];
 
+        string[] MANAFORGE_BOSSES =
+        [
+            "plexus-sentinel", "loom'ithar", "soulbinder-naazindhri", "forgeweaver-araz", "the-soul-hunters", "fractillus", "nexus-king-salhadaar", "dimensius"
+        ];
+
         Dictionary<int, string[]> bossList = new Dictionary<int, string[]>
         {
             [9] = VAULT_BOSSES,
@@ -109,7 +115,8 @@ public class Function
             [11] = AMIRDRASSIL_BOSSES,
             [12] = [.. AMIRDRASSIL_BOSSES, .. VAULT_BOSSES, .. ABERRUS_BOSSES],
             [13] = NERUBAR_BOSSES,
-            [14] = UNDERMINE_BOSSES
+            [14] = UNDERMINE_BOSSES,
+            [15] = MANAFORGE_BOSSES
         };
 
         Dictionary<int, int[]> instanceList = new Dictionary<int, int[]>
@@ -119,7 +126,8 @@ public class Function
             [11] = [AMIRDRASSIL_INSTANCE],
             [12] = [VAULT_INSTANCE, ABERRUS_INSTANCE, AMIRDRASSIL_INSTANCE],
             [13] = [NERUBAR_PALACE],
-            [14] = [UNDERMINE]
+            [14] = [UNDERMINE],
+            [15] = [MANAFORGE],
         };
         
         DateTimeOffset compareDate = _getLastTuesday();
