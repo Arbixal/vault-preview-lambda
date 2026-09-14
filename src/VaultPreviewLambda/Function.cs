@@ -71,111 +71,34 @@ public class Function
     private async Task<IDictionary<string, BossProgress>> _getBlizzardRaidData(string region, string realm, string character, int? currentSeason)
     {
         const string EXPANSION = "Current Season";
-        const int AMIRDRASSIL_INSTANCE = 1207; // Amirdrassil
-        const int VAULT_INSTANCE = 1200; // Vault of the Incarnates
-        const int ABERRUS_INSTANCE = 1208; // Aberrus
-        const int NERUBAR_PALACE = 1273; // Nerubar Palace
-        const int UNDERMINE = 1296; // Liberation of Undermine
-        const int MANAFORGE = 1302; // Manaforge Omega
-        const int VOIDSPIRE = 1307; // The Voidspire
-        const int DREAMRIFT = 1314; // The Dreamrift
-        const int VENOMOUS_ABYSS = 1320; // The Venomous Abyss
-        string[] AMIRDRASSIL_BOSSES =
-        [
-            "gnarlroot", "igira-the-cruel", "volcoross", "council-of-dreams", "larodar", "nymue", "smolderon", "tindral-sageswift", "fyrakk-the-blazing"
-        ];
-
-        string[] VAULT_BOSSES =
-        [
-            "eranog", "terros", "the-primal-council", "sennarth", "dathea", "kurog-grimtotem", "broodkeeper-diurna", "raszageth-the-storm-eater"
-        ];
-
-        string[] ABERRUS_BOSSES =
-        [
-            "kazzara", "the-amalgamation-chamber", "the-forgotten-experiments", "assault-of-the-zaqali", "rashok", "the-vigilant-steward", "magmorax", 
-            "echo-of-neltharion", "scalecommander-sarkareth"
-        ];
-
-        string[] NERUBAR_BOSSES =
-        [
-            "ulgrax-the-devourer", "the-bloodbound-horror", "sikran", "rashanan", "broodtwister-ovinax", "nexus-princess-kyveza", "the-silken-court", "queen-ansurek"
-        ];
-
-        string[] UNDERMINE_BOSSES =
-        [
-            "vexie-and-the-geargrinders", "cauldron-of-carnage", "rik-reverb", "stix-bunkjunker", "sprocketmonger-lockenstock", "the-one-armed-bandit", "mug'zee", "chrome-king-gallywix"
-        ];
-
-        string[] MANAFORGE_BOSSES =
-        [
-            "plexus-sentinel", "loom'ithar", "soulbinder-naazindhri", "forgeweaver-araz", "the-soul-hunters", "fractillus", "nexus-king-salhadaar", "dimensius"
-        ];
-
-        string[] VOIDSpIRE_BOSSES =
-        [
-            "imperator-averzian", "vorasius", "vaelgor-&-ezzorak", "fallen-king-salhadaar", "lightblinded-vanguard", "crown-of-the-cosmos"
-        ];
-
-        string[] DREAMRIFT_BOSSES =
-        [
-            "chimaerus-the-undreamt-god"
-        ];
-
-        string[] VENOMOUS_ABYSS_BOSSES =
-        [
-            "nek'zali-the-soulcoiler", "entombed-sentinels", "vashnik-the-malignant", "the-lost-explorers",
-            "sszorak", "the-twin-fangs", "the-coiled-altar", "ula'tek"
-        ];
-
-        Dictionary<int, string[]> bossList = new Dictionary<int, string[]>
+        RaidSeasonDefinition? configuredSeason = null;
+        if (currentSeason.HasValue &&
+            RaidCatalog.Seasons.TryGetValue(currentSeason.Value, out RaidSeasonDefinition? season))
         {
-            [9] = VAULT_BOSSES,
-            [10] = ABERRUS_BOSSES,
-            [11] = AMIRDRASSIL_BOSSES,
-            [12] = [.. AMIRDRASSIL_BOSSES, .. VAULT_BOSSES, .. ABERRUS_BOSSES],
-            [13] = NERUBAR_BOSSES,
-            [14] = UNDERMINE_BOSSES,
-            [15] = MANAFORGE_BOSSES,
-            [16] = [.. VOIDSpIRE_BOSSES, .. DREAMRIFT_BOSSES],
-            [17] = VENOMOUS_ABYSS_BOSSES
-        };
+            configuredSeason = season;
+        }
 
-        Dictionary<int, int[]> instanceList = new Dictionary<int, int[]>
-        {
-            [9] = [VAULT_INSTANCE],
-            [10] = [ABERRUS_INSTANCE],
-            [11] = [AMIRDRASSIL_INSTANCE],
-            [12] = [VAULT_INSTANCE, ABERRUS_INSTANCE, AMIRDRASSIL_INSTANCE],
-            [13] = [NERUBAR_PALACE],
-            [14] = [UNDERMINE],
-            [15] = [MANAFORGE],
-            [16] = [VOIDSPIRE, DREAMRIFT],
-            [17] = [VENOMOUS_ABYSS],
-        };
+        IReadOnlyList<RaidDefinition> raids = configuredSeason?.Raids ?? [];
         
         DateTimeOffset compareDate = _getLastTuesday();
 
         IDictionary<string, BossProgress> result = new Dictionary<string, BossProgress>();
 
-        string[] bosses = (currentSeason.HasValue ? bossList.GetValueOrDefault(currentSeason.Value) : []) ?? [];
-
         // Seed data
-        foreach (string aBoss in bosses)
+        foreach (RaidBossDefinition boss in raids.SelectMany(x => x.Bosses))
         {
-            result.Add(aBoss, new BossProgress());
+            result.Add(boss.Slug, new BossProgress());
         }
         
         BlizzardEncounterResponse response =
             await _blizzardApiHandler.GetEncounters(region, realm, character);
-
-        int[] instances = (currentSeason.HasValue ? instanceList.GetValueOrDefault(currentSeason.Value) : []) ?? [];
             
         Console.WriteLine($"Expansions: {response.Expansions.Count}");
         BlizzardExpansion? currentExpansion = response.Expansions.FirstOrDefault(x =>
             string.Equals(x.Expansion.Name, EXPANSION, StringComparison.OrdinalIgnoreCase));
 
         currentExpansion ??= response.Expansions.FirstOrDefault(x =>
-            x.Instances.Any(instance => instances.Contains((int)instance.Instance.Id)));
+            x.Instances.Any(instance => raids.Any(raid => raid.InstanceId == instance.Instance.Id)));
 
         if (currentExpansion == null)
         {
@@ -186,7 +109,8 @@ public class Function
         Console.WriteLine($"Instances: {currentExpansion.Instances.Count}");
         foreach (BlizzardInstance currentInstance in currentExpansion.Instances)
         {
-            if (instances.All(x => x != currentInstance.Instance.Id))
+            RaidDefinition? currentRaid = raids.FirstOrDefault(x => x.InstanceId == currentInstance.Instance.Id);
+            if (currentRaid is null)
                 continue;
             
             Console.WriteLine($"Current Raid: {currentInstance.Instance.Name}");
@@ -197,9 +121,9 @@ public class Function
                     DateTimeOffset lastKill = DateTimeOffset.UnixEpoch.AddMilliseconds(encounter.LastKillTimestamp);
                     if (lastKill > compareDate)
                     {
-                        string bossName = _trimBossName(encounter.Encounter.Name);
-                        if (result.TryGetValue(bossName, out BossProgress? bossProgress) ||
-                            result.TryGetValue(bossName.Replace("'", string.Empty), out bossProgress))
+                        RaidBossDefinition? boss = currentRaid.Bosses.FirstOrDefault(x =>
+                            x.EncounterId == encounter.Encounter.Id);
+                        if (boss != null && result.TryGetValue(boss.Slug, out BossProgress? bossProgress))
                         {
                             bossProgress[mode.Difficulty.Type.ToLowerInvariant()] = true;
                         }
@@ -267,16 +191,6 @@ public class Function
     private static string _trimClassName(string className)
     {
         return className.Replace(" ", "").ToLowerInvariant();
-    }
-
-    private static string _trimBossName(string bossName)
-    {
-        int commaPos = bossName.IndexOf(',');
-
-        if (commaPos > 0)
-            bossName = bossName.Substring(0, commaPos);
-
-        return bossName.Replace("’", "'").Replace(" ", "-").ToLowerInvariant();
     }
 
     private static DateTimeOffset _getLastTuesday()

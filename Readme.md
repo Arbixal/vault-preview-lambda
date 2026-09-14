@@ -251,7 +251,11 @@ Deploy the token function before invoking the API or scheduled refresh so it can
 
 The Blizzard integration uses the current regional profile and dynamic namespaces instead of always requesting US data. It supports the Blizzard region codes `us`, `eu`, `kr`, `tw`, and `cn`.
 
-As of September 14, 2026, Blizzard's active season is Midnight Season 2. The raid progress mapping includes The Venomous Abyss and all eight encounters:
+As of September 14, 2026, Blizzard's active season is Midnight Season 2. The raid progress mapping includes The Tidebound Grotto and The Venomous Abyss. Tidebound Grotto has one encounter:
+
+- Nymrissa Wavecaller
+
+The Venomous Abyss has eight encounters:
 
 - Nek'zali the Soulcoiler
 - Entombed Sentinels
