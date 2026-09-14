@@ -4,7 +4,7 @@ namespace VaultPreview.Blizzard.Models;
 
 public class BlizzardEncounter
 {
-    public BlizzardBase Encounter { get; set; }
+    public BlizzardBase Encounter { get; set; } = new();
     [JsonPropertyName("completed_count")] public int CompletedCount { get; set; }
     [JsonPropertyName("last_kill_timestamp")] public long LastKillTimestamp { get; set; }
 }

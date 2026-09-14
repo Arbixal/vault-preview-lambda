@@ -15,7 +15,9 @@ public class RaiderIoHandler(IHttpClientFactory clientFactory) : IRaiderIoHandle
         HttpClient client = clientFactory.CreateClient();
 
         string requestUrl =
-            $"https://raider.io/api/v1/characters/profile?region={region}&realm={realm}&name={character}&fields=mythic_plus_weekly_highest_level_runs";
+            $"https://raider.io/api/v1/characters/profile?region={Uri.EscapeDataString(region.Trim().ToLowerInvariant())}" +
+            $"&realm={Uri.EscapeDataString(realm.Trim().ToLowerInvariant())}" +
+            $"&name={Uri.EscapeDataString(character.Trim())}&fields=mythic_plus_weekly_highest_level_runs";
         RaiderIoProfileResponse? response = await client.GetFromJsonAsync<RaiderIoProfileResponse>(requestUrl);
 
         return response ?? new RaiderIoProfileResponse();

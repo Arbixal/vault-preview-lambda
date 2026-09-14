@@ -5,12 +5,11 @@
     "dotnet lambda help",
     "All the command line options for the Lambda command can be specified in this file."
   ],
-  "profile": "bixnpieces",
   "region": "ap-southeast-2",
   "configuration": "Release",
   "template": "serverless.template",
   "function-architecture": "x86_64",
-  "function-runtime": "dotnet8",
+  "function-runtime": "dotnet10",
   "function-memory-size": 1024,
   "function-timeout": 300,
   "function-handler": "CharacterDataLambda::CharacterDataLambda.Function::FunctionHandler"

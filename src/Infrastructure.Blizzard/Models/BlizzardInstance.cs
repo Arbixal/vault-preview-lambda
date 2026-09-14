@@ -2,6 +2,6 @@
 
 public class BlizzardInstance
 {
-    public BlizzardBase Instance { get; set; }
-    public IList<BlizzardMode> Modes { get; set; }
+    public BlizzardBase Instance { get; set; } = new();
+    public IList<BlizzardMode> Modes { get; set; } = new List<BlizzardMode>();
 }

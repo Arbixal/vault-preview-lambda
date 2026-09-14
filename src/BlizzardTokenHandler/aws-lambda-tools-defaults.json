@@ -5,10 +5,9 @@
     "dotnet lambda help",
     "All the command line options for the Lambda command can be specified in this file."
   ],
-  "profile": "bixnpieces",
   "region": "ap-southeast-2",
   "configuration": "Release",
-  "function-runtime": "dotnet8",
+  "function-runtime": "dotnet10",
   "function-memory-size": 512,
   "function-timeout": 30,
   "function-handler": "BlizzardTokenHandler",

@@ -2,5 +2,5 @@
 
 public class BlizzardKey
 {
-    public string Href { get; set; }
+    public string Href { get; set; } = string.Empty;
 }

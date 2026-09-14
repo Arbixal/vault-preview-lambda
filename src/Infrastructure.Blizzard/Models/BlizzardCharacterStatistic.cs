@@ -5,7 +5,7 @@ namespace VaultPreview.Blizzard.Models;
 public class BlizzardCharacterStatistic
 {
     public long Id { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
     [JsonPropertyName("last_updated_timestamp")] public long LastUpdatedTimestamp { get; set; }
     public double Quantity { get; set; }
 

@@ -2,7 +2,5 @@
 
 public class BlizzardCharacter: BlizzardBase
 {
-    public string Name { get; set; }
-    public long Id { get; set; }
-    public BlizzardRealm Realm { get; set; }
+    public BlizzardRealm Realm { get; set; } = new();
 }

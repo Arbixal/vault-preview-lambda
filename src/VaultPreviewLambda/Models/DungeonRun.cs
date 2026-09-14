@@ -5,5 +5,5 @@ namespace VaultPreviewLambda.Models;
 public class DungeonRun
 {
     [JsonPropertyName("level")] public int Level { get; set; }
-    [JsonPropertyName("name")] public string Name { get; set; }
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
 }

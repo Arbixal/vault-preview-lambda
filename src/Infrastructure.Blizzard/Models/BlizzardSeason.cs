@@ -2,6 +2,6 @@
 
 public class BlizzardSeason
 {
-    public BlizzardKey Key { get; set; }
+    public BlizzardKey Key { get; set; } = new();
     public int Id { get; set; }
 }

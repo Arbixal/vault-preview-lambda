@@ -2,6 +2,6 @@
 
 public class BlizzardExpansion
 {
-    public BlizzardBase Expansion { get; set; }
-    public IList<BlizzardInstance> Instances { get; set; }
+    public BlizzardBase Expansion { get; set; } = new();
+    public IList<BlizzardInstance> Instances { get; set; } = new List<BlizzardInstance>();
 }

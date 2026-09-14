@@ -46,7 +46,7 @@ public class VaultCacheHandler(IAmazonS3 s3Client) : IVaultCacheHandler
                 BucketName = _BUCKET_NAME
             });
 
-            foreach (S3Object aFile in listResponse.S3Objects)
+            foreach (S3Object aFile in listResponse.S3Objects ?? [])
             {
                 string[] characterParts = aFile.Key.Replace(".json", "").Split("-");
                 if (characterParts.Length != 3)
@@ -54,7 +54,9 @@ public class VaultCacheHandler(IAmazonS3 s3Client) : IVaultCacheHandler
                 
                 CharacterData aCharacter = new CharacterData(characterParts[2], characterParts[1], characterParts[0])
                     {
-                        LastUpdatedTimestamp = new DateTimeOffset(aFile.LastModified).ToUnixTimeMilliseconds()
+                        LastUpdatedTimestamp = aFile.LastModified.HasValue
+                            ? new DateTimeOffset(aFile.LastModified.Value).ToUnixTimeMilliseconds()
+                            : 0
                     };
 
                 returnData.Add(aCharacter);
@@ -74,7 +76,8 @@ public class VaultCacheHandler(IAmazonS3 s3Client) : IVaultCacheHandler
         {
             using MemoryStream memoryStream = new MemoryStream();
             await JsonSerializer.SerializeAsync(memoryStream, characterData);
-            
+            memoryStream.Position = 0;
+
             PutObjectResponse response = await s3Client.PutObjectAsync(new PutObjectRequest()
             {
                 BucketName = _BUCKET_NAME,

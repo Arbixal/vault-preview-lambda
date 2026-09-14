@@ -2,6 +2,6 @@
 
 public class BlizzardEncounterResponse
 {
-    public BlizzardCharacter Character { get; set; }
-    public IList<BlizzardExpansion> Expansions { get; set; }
+    public BlizzardCharacter Character { get; set; } = new();
+    public IList<BlizzardExpansion> Expansions { get; set; } = new List<BlizzardExpansion>();
 }

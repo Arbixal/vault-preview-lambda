@@ -1,7 +1,7 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Transform": "AWS::Serverless-2016-10-31",
-  "Description": "This template is partially managed by Amazon.Lambda.Annotations (v1.2.0.0).",
+  "Description": "This template is partially managed by Amazon.Lambda.Annotations (v2.4.0.0).",
   "Resources": {
     "VaultPreviewLambdaFunctionFunctionHandlerGenerated": {
       "Type": "AWS::Serverless::Function",
@@ -9,16 +9,34 @@
         "Tool": "Amazon.Lambda.Annotations",
         "SyncedEvents": [
           "RootGet"
-        ]
+        ],
+        "SyncedEventProperties": {
+          "RootGet": [
+            "Path",
+            "Method"
+          ]
+        }
       },
       "Properties": {
-        "Runtime": "dotnet8",
+        "Runtime": "dotnet10",
         "CodeUri": ".",
         "MemorySize": 1024,
         "Timeout": 30,
         "Policies": [
           "AWSLambdaBasicExecutionRole",
-          "arn:aws:iam::366097473055:policy/LambdaParamStoreAccessRole",
+          {
+            "Statement": {
+              "Sid": "ParameterStoreAccessStatement",
+              "Effect": "Allow",
+              "Action": [
+                "ssm:GetParameter",
+                "ssm:PutParameter"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Blizzard/*"
+              }
+            }
+          },
           {
             "Statement": {
               "Sid": "S3AccessStatement",

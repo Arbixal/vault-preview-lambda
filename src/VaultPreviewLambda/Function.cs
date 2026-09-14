@@ -77,6 +77,9 @@ public class Function
         const int NERUBAR_PALACE = 1273; // Nerubar Palace
         const int UNDERMINE = 1296; // Liberation of Undermine
         const int MANAFORGE = 1302; // Manaforge Omega
+        const int VOIDSPIRE = 1307; // The Voidspire
+        const int DREAMRIFT = 1314; // The Dreamrift
+        const int VENOMOUS_ABYSS = 1320; // The Venomous Abyss
         string[] AMIRDRASSIL_BOSSES =
         [
             "gnarlroot", "igira-the-cruel", "volcoross", "council-of-dreams", "larodar", "nymue", "smolderon", "tindral-sageswift", "fyrakk-the-blazing"
@@ -108,6 +111,22 @@ public class Function
             "plexus-sentinel", "loom'ithar", "soulbinder-naazindhri", "forgeweaver-araz", "the-soul-hunters", "fractillus", "nexus-king-salhadaar", "dimensius"
         ];
 
+        string[] VOIDSpIRE_BOSSES =
+        [
+            "imperator-averzian", "vorasius", "vaelgor-&-ezzorak", "fallen-king-salhadaar", "lightblinded-vanguard", "crown-of-the-cosmos"
+        ];
+
+        string[] DREAMRIFT_BOSSES =
+        [
+            "chimaerus-the-undreamt-god"
+        ];
+
+        string[] VENOMOUS_ABYSS_BOSSES =
+        [
+            "nek'zali-the-soulcoiler", "entombed-sentinels", "vashnik-the-malignant", "the-lost-explorers",
+            "sszorak", "the-twin-fangs", "the-coiled-altar", "ula'tek"
+        ];
+
         Dictionary<int, string[]> bossList = new Dictionary<int, string[]>
         {
             [9] = VAULT_BOSSES,
@@ -116,7 +135,9 @@ public class Function
             [12] = [.. AMIRDRASSIL_BOSSES, .. VAULT_BOSSES, .. ABERRUS_BOSSES],
             [13] = NERUBAR_BOSSES,
             [14] = UNDERMINE_BOSSES,
-            [15] = MANAFORGE_BOSSES
+            [15] = MANAFORGE_BOSSES,
+            [16] = [.. VOIDSpIRE_BOSSES, .. DREAMRIFT_BOSSES],
+            [17] = VENOMOUS_ABYSS_BOSSES
         };
 
         Dictionary<int, int[]> instanceList = new Dictionary<int, int[]>
@@ -128,6 +149,8 @@ public class Function
             [13] = [NERUBAR_PALACE],
             [14] = [UNDERMINE],
             [15] = [MANAFORGE],
+            [16] = [VOIDSPIRE, DREAMRIFT],
+            [17] = [VENOMOUS_ABYSS],
         };
         
         DateTimeOffset compareDate = _getLastTuesday();
@@ -144,9 +167,15 @@ public class Function
         
         BlizzardEncounterResponse response =
             await _blizzardApiHandler.GetEncounters(region, realm, character);
+
+        int[] instances = (currentSeason.HasValue ? instanceList.GetValueOrDefault(currentSeason.Value) : []) ?? [];
             
         Console.WriteLine($"Expansions: {response.Expansions.Count}");
-        BlizzardExpansion? currentExpansion = response.Expansions.FirstOrDefault(x => x.Expansion.Name == EXPANSION);
+        BlizzardExpansion? currentExpansion = response.Expansions.FirstOrDefault(x =>
+            string.Equals(x.Expansion.Name, EXPANSION, StringComparison.OrdinalIgnoreCase));
+
+        currentExpansion ??= response.Expansions.FirstOrDefault(x =>
+            x.Instances.Any(instance => instances.Contains((int)instance.Instance.Id)));
 
         if (currentExpansion == null)
         {
@@ -157,8 +186,6 @@ public class Function
         Console.WriteLine($"Instances: {currentExpansion.Instances.Count}");
         foreach (BlizzardInstance currentInstance in currentExpansion.Instances)
         {
-            int[] instances = (currentSeason.HasValue ? instanceList.GetValueOrDefault(currentSeason.Value) : []) ?? [];
-
             if (instances.All(x => x != currentInstance.Instance.Id))
                 continue;
             
@@ -170,7 +197,12 @@ public class Function
                     DateTimeOffset lastKill = DateTimeOffset.UnixEpoch.AddMilliseconds(encounter.LastKillTimestamp);
                     if (lastKill > compareDate)
                     {
-                        result[_trimBossName(encounter.Encounter.Name)][mode.Difficulty.Type.ToLower()] = true;
+                        string bossName = _trimBossName(encounter.Encounter.Name);
+                        if (result.TryGetValue(bossName, out BossProgress? bossProgress) ||
+                            result.TryGetValue(bossName.Replace("'", string.Empty), out bossProgress))
+                        {
+                            bossProgress[mode.Difficulty.Type.ToLowerInvariant()] = true;
+                        }
                     }
                 }
             }
@@ -187,7 +219,7 @@ public class Function
             response.WeeklyHighestLevelRuns?.Select(x => new DungeonRun() { Level = x.MythicLevel, Name = x.Dungeon })
             ?? new List<DungeonRun>();
 
-        return (_trimClassName(response.Class), weeklyRuns.ToList());
+        return (string.IsNullOrEmpty(response.Class) ? string.Empty : _trimClassName(response.Class), weeklyRuns.ToList());
     }
 
     private async Task<Dictionary<int, int>> _getDelveData(string region, string realm, string character)
@@ -234,7 +266,7 @@ public class Function
 
     private static string _trimClassName(string className)
     {
-        return className.Replace(" ", "").ToLower();
+        return className.Replace(" ", "").ToLowerInvariant();
     }
 
     private static string _trimBossName(string bossName)
@@ -244,7 +276,7 @@ public class Function
         if (commaPos > 0)
             bossName = bossName.Substring(0, commaPos);
 
-        return bossName.Replace(" ", "-").ToLower();
+        return bossName.Replace("’", "'").Replace(" ", "-").ToLowerInvariant();
     }
 
     private static DateTimeOffset _getLastTuesday()

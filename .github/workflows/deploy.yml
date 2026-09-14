@@ -1,0 +1,88 @@
+name: Deploy Lambdas
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-lambda-deployment
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  LAMBDA_BUILD_BUCKET: ${{ vars.LAMBDA_BUILD_BUCKET }}
+  BLIZZARD_TOKEN_ROLE_ARN: ${{ vars.BLIZZARD_TOKEN_ROLE_ARN }}
+
+jobs:
+  deploy:
+    name: Deploy Lambda functions
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Validate deployment configuration
+        env:
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+        run: |
+          test -n "$AWS_ROLE_TO_ASSUME" || { echo "AWS_ROLE_TO_ASSUME is not configured"; exit 1; }
+          test -n "$AWS_REGION" || { echo "AWS_REGION is not configured"; exit 1; }
+          test -n "$LAMBDA_BUILD_BUCKET" || { echo "LAMBDA_BUILD_BUCKET is not configured"; exit 1; }
+          test -n "$BLIZZARD_TOKEN_ROLE_ARN" || { echo "BLIZZARD_TOKEN_ROLE_ARN is not configured"; exit 1; }
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions-${{ github.run_id }}
+
+      - name: Install Amazon.Lambda.Tools
+        run: |
+          dotnet tool install --global Amazon.Lambda.Tools --version 7.0.0
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Restore dependencies
+        run: dotnet restore VaultPreviewLambda.sln
+
+      - name: Build solution
+        run: dotnet build VaultPreviewLambda.sln --configuration Release --no-restore
+
+      - name: Deploy VaultPreviewLambda
+        working-directory: src/VaultPreviewLambda
+        run: >-
+          dotnet lambda deploy-serverless vault-preview
+          --region "$AWS_REGION"
+          --s3-bucket "$LAMBDA_BUILD_BUCKET"
+          --configuration Release
+          --disable-interactive true
+
+      - name: Deploy CharacterDataLambda
+        working-directory: src/CharacterDataLambda
+        run: >-
+          dotnet lambda deploy-serverless character-data
+          --region "$AWS_REGION"
+          --s3-bucket "$LAMBDA_BUILD_BUCKET"
+          --configuration Release
+          --disable-interactive true
+
+      - name: Deploy BlizzardTokenHandler
+        working-directory: src/BlizzardTokenHandler
+        run: >-
+          dotnet lambda deploy-function BlizzardTokenHandler
+          --region "$AWS_REGION"
+          --function-role "$BLIZZARD_TOKEN_ROLE_ARN"
+          --configuration Release
+          --disable-interactive true

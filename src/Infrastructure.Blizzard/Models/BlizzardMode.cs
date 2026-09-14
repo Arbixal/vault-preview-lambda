@@ -2,7 +2,7 @@
 
 public class BlizzardMode
 {
-    public BlizzardType Difficulty { get; set; }
-    public BlizzardType Status { get; set; }
-    public BlizzardProgress Progress { get; set; }
+    public BlizzardType Difficulty { get; set; } = new();
+    public BlizzardType Status { get; set; } = new();
+    public BlizzardProgress Progress { get; set; } = new();
 }

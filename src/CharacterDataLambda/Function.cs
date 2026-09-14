@@ -58,8 +58,8 @@ public class Function
             }
 
             Console.WriteLine($"Getting data for Character '{characterData.FullName}'.");
-            Dictionary<int,int> response = 
-                await _blizzardApiHandler.GetDelveStatistics(characterData.Region, characterData.Realm, characterData.Name);
+            Dictionary<int,int> response =
+                await _blizzardApiHandler.GetDelveStatistics(characterData.Region!, characterData.Realm!, characterData.Name!);
 
             characterData.SetDelveData(response);
             
