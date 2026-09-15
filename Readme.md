@@ -32,7 +32,11 @@ dotnet restore VaultPreviewLambda.sln
 dotnet build VaultPreviewLambda.sln --configuration Release
 ```
 
-There is currently no test project in the solution. The release build is the available automated compile check.
+Run the solution tests with:
+
+```bash
+dotnet test VaultPreviewLambda.sln --configuration Release
+```
 
 ## Functions
 

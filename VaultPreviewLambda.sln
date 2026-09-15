@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CharacterDataLambda", "src\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.VaultCache", "src\Infrastructure.VaultCache\Infrastructure.VaultCache.csproj", "{D220A43A-EFAD-41B9-A5AF-D4AC7B3AD98A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CharacterDataLambda.Tests", "tests\CharacterDataLambda.Tests\CharacterDataLambda.Tests.csproj", "{5C79F802-88D2-4D24-9372-0D73FE3B7D87}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,5 +57,9 @@ Global
 		{D220A43A-EFAD-41B9-A5AF-D4AC7B3AD98A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D220A43A-EFAD-41B9-A5AF-D4AC7B3AD98A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D220A43A-EFAD-41B9-A5AF-D4AC7B3AD98A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5C79F802-88D2-4D24-9372-0D73FE3B7D87}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5C79F802-88D2-4D24-9372-0D73FE3B7D87}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5C79F802-88D2-4D24-9372-0D73FE3B7D87}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5C79F802-88D2-4D24-9372-0D73FE3B7D87}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

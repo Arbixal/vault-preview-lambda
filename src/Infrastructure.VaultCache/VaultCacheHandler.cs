@@ -10,6 +10,7 @@ public interface IVaultCacheHandler
     Task<CharacterData?> GetCharacter(string region, string realm, string name);
     Task<IList<CharacterData>> GetAllCharacters();
     Task<bool> SaveCharacter(CharacterData characterData);
+    Task<bool> DeleteCharacter(string region, string realm, string name);
 }
 
 public class VaultCacheHandler(IAmazonS3 s3Client) : IVaultCacheHandler
@@ -84,6 +85,25 @@ public class VaultCacheHandler(IAmazonS3 s3Client) : IVaultCacheHandler
                 Key = string.Format(_KEY_FORMAT, characterData.Region, characterData.Realm, characterData.Name),
                 AutoCloseStream = true,
                 InputStream = memoryStream
+            });
+
+            return true;
+        }
+        catch (AmazonS3Exception e)
+        {
+            Console.WriteLine(e);
+            return false;
+        }
+    }
+
+    public async Task<bool> DeleteCharacter(string region, string realm, string name)
+    {
+        try
+        {
+            await s3Client.DeleteObjectAsync(new DeleteObjectRequest
+            {
+                BucketName = _BUCKET_NAME,
+                Key = string.Format(_KEY_FORMAT, region, realm, name)
             });
 
             return true;

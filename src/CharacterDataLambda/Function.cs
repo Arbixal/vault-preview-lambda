@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http;
 using Amazon.Lambda.Core;
 using Amazon.Lambda.Annotations;
 using VaultPreview.Blizzard;
@@ -58,11 +60,22 @@ public class Function
             }
 
             Console.WriteLine($"Getting data for Character '{characterData.FullName}'.");
-            Dictionary<int,int> response =
-                await _blizzardApiHandler.GetDelveStatistics(characterData.Region!, characterData.Realm!, characterData.Name!);
+            Dictionary<int,int> response;
+            try
+            {
+                response = await _blizzardApiHandler.GetDelveStatistics(
+                    characterData.Region!, characterData.Realm!, characterData.Name!);
+            }
+            catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+            {
+                Console.WriteLine($"Character '{characterData.FullName}' was not found by Blizzard. Removing its stale cache entry.");
+                await _vaultCacheHandler.DeleteCharacter(
+                    characterData.Region!, characterData.Realm!, characterData.Name!);
+                continue;
+            }
 
             characterData.SetDelveData(response);
-            
+
             // Save to S3
             Console.WriteLine($"Saving Character '{characterData.FullName}'.");
             await _vaultCacheHandler.SaveCharacter(characterData);
