@@ -39,7 +39,7 @@ public sealed record SeasonSlotDefinition(
     int Required,
     string Label,
     int DisplayItemCount,
-    SeasonRewardDefinition Reward);
+    SeasonRewardDefinition FallbackReward);
 
 public sealed record SeasonRewardDefinition(int ItemLevel, string Rarity);
 

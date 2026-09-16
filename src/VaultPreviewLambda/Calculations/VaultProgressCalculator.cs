@@ -312,6 +312,16 @@ public sealed class VaultProgressCalculator
         IList<ProgressItem> items)
     {
         bool isComplete = completed >= definition.Required;
+        ProgressItem? evidenceItem = isComplete
+            ? items.LastOrDefault(item => item.ItemLevel.HasValue && !string.IsNullOrEmpty(item.Rarity))
+            : null;
+        Reward reward = evidenceItem != null
+            ? new Reward { ItemLevel = evidenceItem.ItemLevel, Rarity = evidenceItem.Rarity }
+            : new Reward
+            {
+                ItemLevel = isComplete ? definition.FallbackReward.ItemLevel : null,
+                Rarity = isComplete ? definition.FallbackReward.Rarity : null
+            };
         return new VaultSlot
         {
             Id = definition.Id,
@@ -326,11 +336,7 @@ public sealed class VaultProgressCalculator
                 Completed = completed,
                 State = isComplete ? "complete" : "incomplete"
             },
-            Reward = new Reward
-            {
-                ItemLevel = isComplete ? definition.Reward.ItemLevel : null,
-                Rarity = isComplete ? definition.Reward.Rarity : null
-            },
+            Reward = reward,
             Items = items
         };
     }

@@ -82,7 +82,7 @@ public class SeasonConfigurationTests
         Assert.Contains(errors, error => error.Contains("source ID across activities"));
         Assert.Contains(errors, error => error.Contains("required value must be greater"));
         Assert.Contains(errors, error => error.Contains("display item count must be non-negative"));
-        Assert.Contains(errors, error => error.Contains("reward mapping is required"));
+        Assert.Contains(errors, error => error.Contains("fallback reward mapping is required"));
     }
 
     [Fact]
@@ -207,6 +207,9 @@ public class SeasonConfigurationTests
                 0,
                 slots,
                 ["wow:journal-instance:1320"])
+            {
+                ProgressRules = [new SeasonProgressRule("heroic-reward", "heroic", 1, 318, "epic")]
+            }
         ];
         SeasonConfiguration configuration = new(
             "midnight-s2",
@@ -266,6 +269,9 @@ public class SeasonConfigurationTests
                     2,
                     new SeasonRewardDefinition(318, "epic"))
             ],
-            ["wow:journal-instance:1320"]);
+            ["wow:journal-instance:1320"])
+        {
+            ProgressRules = [new SeasonProgressRule("heroic-reward", "heroic", 1, 318, "epic")]
+        };
     }
 }

@@ -2,6 +2,13 @@ namespace VaultShared.Seasons;
 
 public static class SeasonConfigurationValidator
 {
+    private static readonly ISet<string> _evidenceDrivenKinds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "raid",
+        "mythic-plus",
+        "delves"
+    };
+
     private static readonly ISet<string> _supportedRarities = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "poor",
@@ -96,6 +103,11 @@ public static class SeasonConfigurationValidator
                 continue;
             }
 
+            if (_evidenceDrivenKinds.Contains(activity.Kind) && activity.ProgressRules.Count == 0)
+            {
+                errors.Add($"{activityPrefix} must define at least one progress rule.");
+            }
+
             _validateUnique(activity.Slots, x => x.Id, $"slot ID in activity '{activity.Id}'", errors);
             _validateUnique(
                 activity.Slots,
@@ -116,24 +128,24 @@ public static class SeasonConfigurationValidator
                 if (slot.DisplayItemCount < 0)
                     errors.Add($"{slotPrefix} display item count must be non-negative.");
 
-                if (slot.Reward == null)
+                if (slot.FallbackReward == null)
                 {
-                    errors.Add($"{slotPrefix} reward mapping is required.");
+                    errors.Add($"{slotPrefix} fallback reward mapping is required.");
                 }
                 else
                 {
-                    if (slot.Reward.ItemLevel <= 0)
-                        errors.Add($"{slotPrefix} reward item level must be greater than zero.");
+                    if (slot.FallbackReward.ItemLevel <= 0)
+                        errors.Add($"{slotPrefix} fallback reward item level must be greater than zero.");
 
-                    _requireText(slot.Reward.Rarity, $"{slotPrefix} reward rarity", errors);
-                    if (!_supportedRarities.Contains(slot.Reward.Rarity))
+                    _requireText(slot.FallbackReward.Rarity, $"{slotPrefix} fallback reward rarity", errors);
+                    if (!_supportedRarities.Contains(slot.FallbackReward.Rarity))
                     {
                         errors.Add(
-                            $"{slotPrefix} reward rarity '{slot.Reward.Rarity}' is not supported.");
+                            $"{slotPrefix} fallback reward rarity '{slot.FallbackReward.Rarity}' is not supported.");
                     }
-                    else if (slot.Reward.Rarity != slot.Reward.Rarity.ToLowerInvariant())
+                    else if (slot.FallbackReward.Rarity != slot.FallbackReward.Rarity.ToLowerInvariant())
                     {
-                        errors.Add($"{slotPrefix} reward rarity must use lowercase canonical casing.");
+                        errors.Add($"{slotPrefix} fallback reward rarity must use lowercase canonical casing.");
                     }
                 }
             }

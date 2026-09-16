@@ -115,13 +115,15 @@ public class NormalizedProgressCalculatorTests
         Assert.Equal("frostmage", response.Character.Class);
         Assert.Equal(4, response.Sections.Count);
         Assert.Equal("complete", response.Sections[0].Slots[0].Progress.State);
-        Assert.Equal(318, response.Sections[0].Slots[0].Reward.ItemLevel);
+        Assert.Equal(330, response.Sections[0].Slots[0].Reward.ItemLevel);
         Assert.Equal(330, response.Sections[0].Slots[0].Items[0].ItemLevel);
         Assert.Single(response.Sections[0].AdditionalItems);
         Assert.Equal("Higher Run +10", response.Sections[1].Slots[0].Items[0].Label);
         Assert.Equal(325, response.Sections[1].Slots[0].Items[0].ItemLevel);
+        Assert.Equal(325, response.Sections[1].Slots[0].Reward.ItemLevel);
         Assert.Equal(2, response.Sections[2].Slots[0].Progress.Completed);
         Assert.Equal(320, response.Sections[2].Slots[0].Items[0].ItemLevel);
+        Assert.Equal(320, response.Sections[2].Slots[0].Reward.ItemLevel);
         Assert.Equal("unsupported", response.Sections[3].Status);
     }
 
