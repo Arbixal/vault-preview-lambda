@@ -17,4 +17,9 @@
   <ItemGroup>
     <ProjectReference Include="../../src/VaultPreviewLambda/VaultPreviewLambda.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../contracts/v1/fixtures/legacy-flat-response-full.json"
+          Link="Fixtures/legacy-flat-response-full.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
