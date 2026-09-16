@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "contract": "v1",
+  "fixtures": [
+    {
+      "name": "app-config",
+      "path": "app-config.json",
+      "responseType": "AppConfigResponse",
+      "purpose": "Runtime active-season configuration response."
+    },
+    {
+      "name": "current-season",
+      "path": "current-season.json",
+      "responseType": "CharacterProgressResponse",
+      "purpose": "Representative current-season response with raid, Mythic+, and Delve progress."
+    },
+    {
+      "name": "empty-progress",
+      "path": "empty-progress.json",
+      "responseType": "CharacterProgressResponse",
+      "purpose": "Active sections with no completed progress."
+    },
+    {
+      "name": "partial-progress",
+      "path": "partial-progress.json",
+      "responseType": "CharacterProgressResponse",
+      "purpose": "Partially completed slots and nested raid difficulty progress."
+    },
+    {
+      "name": "unavailable-section",
+      "path": "unavailable-section.json",
+      "responseType": "CharacterProgressResponse",
+      "purpose": "One unavailable activity alongside a valid activity."
+    },
+    {
+      "name": "stale-metadata",
+      "path": "stale-metadata.json",
+      "responseType": "CharacterProgressResponse",
+      "purpose": "Last-known-good Journal metadata served with stale freshness."
+    },
+    {
+      "name": "unknown-activity-kind",
+      "path": "unknown-activity-kind.json",
+      "responseType": "CharacterProgressResponse",
+      "purpose": "A future activity kind rendered through the generic section/slot shape."
+    },
+    {
+      "name": "future-season",
+      "path": "future-season.json",
+      "responseType": "CharacterProgressResponse",
+      "purpose": "Synthetic future season with different slot requirements and an additional activity."
+    },
+    {
+      "name": "legacy-flat-response-minimal",
+      "path": "legacy-flat-response.json",
+      "responseType": "LegacyProgressResponse",
+      "purpose": "Minimal compatibility fixture for the existing unversioned response shape."
+    },
+    {
+      "name": "legacy-flat-response-full",
+      "path": "legacy-flat-response-full.json",
+      "responseType": "LegacyProgressResponse",
+      "purpose": "Full golden compatibility fixture covering all Delve levels, multiple raids, and a complete weekly run set."
+    }
+  ]
+}

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "character": {
+    "region": "us",
+    "realm": "nagrand",
+    "name": "newcharacter",
+    "class": null
+  },
+  "season": {
+    "id": "midnight-s2",
+    "displayName": "Midnight Season 2",
+    "shortLabel": "Season 2",
+    "expansion": "Midnight",
+    "sourceSeasonId": 18,
+    "revision": "midnight-s2-r1",
+    "revisionHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "progressPeriod": {
+    "resetAt": "2026-09-15T15:00:00Z",
+    "asOf": "2026-09-16T03:00:00Z"
+  },
+  "sections": [
+    {
+      "id": "raid",
+      "title": "Raids",
+      "kind": "raid",
+      "status": "empty",
+      "freshness": "fresh",
+      "slots": [
+        {
+          "id": "raid-slot-2",
+          "requirement": { "unit": "bosses", "required": 2, "label": "2 bosses" },
+          "progress": { "completed": 0, "state": "incomplete" },
+          "reward": { "itemLevel": null, "rarity": null },
+          "items": []
+        }
+      ],
+      "additionalItems": []
+    },
+    {
+      "id": "mythic-plus",
+      "title": "Mythic+",
+      "kind": "mythic-plus",
+      "status": "empty",
+      "freshness": "fresh",
+      "slots": [
+        {
+          "id": "mythic-plus-slot-1",
+          "requirement": { "unit": "runs", "required": 1, "label": "1 run" },
+          "progress": { "completed": 0, "state": "incomplete" },
+          "reward": { "itemLevel": null, "rarity": null },
+          "items": []
+        }
+      ],
+      "additionalItems": []
+    },
+    {
+      "id": "delves",
+      "title": "Delves",
+      "kind": "delves",
+      "status": "empty",
+      "freshness": "fresh",
+      "slots": [
+        {
+          "id": "delves-slot-2",
+          "requirement": { "unit": "delves", "required": 2, "label": "2 Delves" },
+          "progress": { "completed": 0, "state": "incomplete" },
+          "reward": { "itemLevel": null, "rarity": null },
+          "items": []
+        }
+      ],
+      "additionalItems": []
+    }
+  ]
+}

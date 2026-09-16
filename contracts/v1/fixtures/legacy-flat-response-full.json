@@ -1,0 +1,85 @@
+{
+  "bixposter-nagrand": {
+    "player_class": "shaman",
+    "raid": {
+      "nek-zali-the-soulcoiler": {
+        "mythic": false,
+        "heroic": true,
+        "normal": false,
+        "lfr": false
+      },
+      "entombed-sentinels": {
+        "mythic": false,
+        "heroic": false,
+        "normal": true,
+        "lfr": false
+      },
+      "vashnik-the-malignant": {
+        "mythic": false,
+        "heroic": false,
+        "normal": false,
+        "lfr": true
+      },
+      "the-lost-explorers": {
+        "mythic": false,
+        "heroic": false,
+        "normal": false,
+        "lfr": false
+      },
+      "sszorak": {
+        "mythic": false,
+        "heroic": false,
+        "normal": false,
+        "lfr": false
+      },
+      "the-twin-fangs": {
+        "mythic": false,
+        "heroic": false,
+        "normal": false,
+        "lfr": false
+      },
+      "the-coiled-altar": {
+        "mythic": false,
+        "heroic": false,
+        "normal": false,
+        "lfr": false
+      },
+      "ula'tek": {
+        "mythic": false,
+        "heroic": false,
+        "normal": false,
+        "lfr": false
+      },
+      "nymrissa-wavecaller": {
+        "mythic": false,
+        "heroic": true,
+        "normal": false,
+        "lfr": false
+      }
+    },
+    "dungeons": [
+      { "level": 12, "name": "The Dawnbreaker" },
+      { "level": 11, "name": "Ara-Kara, City of Echoes" },
+      { "level": 10, "name": "The Stonevault" },
+      { "level": 9, "name": "City of Threads" },
+      { "level": 8, "name": "The Dawnbreaker" },
+      { "level": 7, "name": "Ara-Kara, City of Echoes" },
+      { "level": 6, "name": "The Stonevault" },
+      { "level": 5, "name": "City of Threads" }
+    ],
+    "delves": {
+      "1": 0,
+      "2": 1,
+      "3": 1,
+      "4": 0,
+      "5": 0,
+      "6": 1,
+      "7": 0,
+      "8": 4,
+      "9": 2,
+      "10": 1,
+      "11": 0
+    },
+    "season": 18
+  }
+}

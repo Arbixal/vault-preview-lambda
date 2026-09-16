@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "character": {
+    "region": "us",
+    "realm": "tichondrius",
+    "name": "futureseasoncharacter",
+    "class": "priest"
+  },
+  "season": {
+    "id": "midnight-s3",
+    "displayName": "Midnight Season 3",
+    "shortLabel": "Season 3",
+    "expansion": "Midnight",
+    "sourceSeasonId": 19,
+    "revision": "midnight-s3-r1",
+    "revisionHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "progressPeriod": {
+    "resetAt": "2026-12-01T15:00:00Z",
+    "asOf": "2026-12-02T03:00:00Z"
+  },
+  "sections": [
+    {
+      "id": "raid",
+      "title": "Raids",
+      "kind": "raid",
+      "status": "available",
+      "freshness": "fresh",
+      "slots": [
+        {
+          "id": "raid-slot-3",
+          "requirement": { "unit": "bosses", "required": 3, "label": "3 bosses" },
+          "progress": { "completed": 3, "state": "complete" },
+          "reward": { "itemLevel": 330, "rarity": "epic" },
+          "items": []
+        },
+        {
+          "id": "raid-slot-9",
+          "requirement": { "unit": "bosses", "required": 9, "label": "9 bosses" },
+          "progress": { "completed": 3, "state": "incomplete" },
+          "reward": { "itemLevel": null, "rarity": null },
+          "items": []
+        }
+      ],
+      "additionalItems": []
+    },
+    {
+      "id": "world-events",
+      "title": "World Events",
+      "kind": "world-events",
+      "status": "available",
+      "freshness": "fresh",
+      "slots": [
+        {
+          "id": "world-events-slot-5",
+          "requirement": { "unit": "events", "required": 5, "label": "5 events" },
+          "progress": { "completed": 2, "state": "incomplete" },
+          "reward": { "itemLevel": null, "rarity": null },
+          "items": []
+        }
+      ],
+      "additionalItems": []
+    }
+  ]
+}

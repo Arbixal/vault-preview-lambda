@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "character": {
+    "region": "us",
+    "realm": "stormrage",
+    "name": "stalecharacter",
+    "class": "paladin"
+  },
+  "season": {
+    "id": "midnight-s2",
+    "displayName": "Midnight Season 2",
+    "shortLabel": "Season 2",
+    "expansion": "Midnight",
+    "sourceSeasonId": 18,
+    "revision": "midnight-s2-r1",
+    "revisionHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "progressPeriod": {
+    "resetAt": "2026-09-15T15:00:00Z",
+    "asOf": "2026-09-16T06:00:00Z"
+  },
+  "sections": [
+    {
+      "id": "raid",
+      "title": "Raids",
+      "kind": "raid",
+      "status": "available",
+      "freshness": "stale",
+      "slots": [
+        {
+          "id": "raid-slot-2",
+          "requirement": { "unit": "bosses", "required": 2, "label": "2 bosses" },
+          "progress": { "completed": 2, "state": "complete" },
+          "reward": { "itemLevel": 318, "rarity": "epic" },
+          "items": [
+            {
+              "id": "wow:journal-encounter:2888",
+              "label": "N",
+              "state": "complete",
+              "progress": { "dimensions": [] },
+              "tooltip": {
+                "title": "Nek'zali the Soulcoiler",
+                "rows": []
+              }
+            }
+          ]
+        }
+      ],
+      "additionalItems": []
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "activeSeason": {
+    "id": "midnight-s2",
+    "displayName": "Midnight Season 2",
+    "shortLabel": "Season 2",
+    "expansion": "Midnight",
+    "sourceSeasonId": 18,
+    "revision": "midnight-s2-r1",
+    "revisionHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}
