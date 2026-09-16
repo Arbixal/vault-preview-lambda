@@ -1,0 +1,643 @@
+openapi: 3.1.0
+info:
+  title: Vault Preview API
+  version: 1.0.0
+  license:
+    name: Private application API
+    identifier: proprietary
+  description: |
+    Canonical API contract for the season-agnostic Vault Preview integration.
+
+    The API owns season configuration, progress calculations, ordering, reward
+    mappings, and semantic presentation data. Activity kinds, statuses,
+    freshness values, and rarity values are intentionally open strings so a
+    future season can add values without making an older client reject the
+    complete response. Clients must ignore unknown optional properties and
+    preserve known data when a response contains additive fields.
+servers:
+  - url: https://api.example.invalid
+    description: Placeholder server. Deployment supplies the production URL.
+security: []
+tags:
+  - name: Configuration
+    description: Active season and application configuration.
+  - name: Character progress
+    description: Server-calculated character Vault progress.
+  - name: Legacy
+    description: Deprecated compatibility endpoints.
+paths:
+  /v1/app-config:
+    get:
+      tags:
+        - Configuration
+      operationId: getAppConfig
+      summary: Get the active application configuration
+      responses:
+        '200':
+          description: The active global season configuration snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppConfigResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '503':
+          $ref: '#/components/responses/ConfigurationUnavailable'
+  /v1/vault-progress/{region}/{realm}/{character}:
+    get:
+      tags:
+        - Character progress
+      operationId: getVaultProgress
+      summary: Get calculated Vault progress for a character
+      parameters:
+        - $ref: '#/components/parameters/Region'
+        - $ref: '#/components/parameters/Realm'
+        - $ref: '#/components/parameters/Character'
+      responses:
+        '200':
+          description: The character's calculated progress for one season snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CharacterProgressResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/CharacterNotFound'
+        '503':
+          $ref: '#/components/responses/CharacterProgressUnavailable'
+  /vault-progress/{region}/{realm}/{character}:
+    get:
+      deprecated: true
+      tags:
+        - Legacy
+      operationId: getLegacyVaultProgress
+      summary: Get the legacy flat character progress response
+      description: |
+        Compatibility endpoint for clients deployed before the v1 contract.
+        This response remains unchanged through the migration period and may
+        be removed with the next major release.
+      parameters:
+        - $ref: '#/components/parameters/Region'
+        - $ref: '#/components/parameters/Realm'
+        - $ref: '#/components/parameters/Character'
+      responses:
+        '200':
+          description: The legacy response keyed by a constructed character/realm string.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegacyProgressResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/CharacterNotFound'
+        '503':
+          $ref: '#/components/responses/CharacterProgressUnavailable'
+components:
+  parameters:
+    Region:
+      name: region
+      in: path
+      required: true
+      description: Blizzard region code.
+      schema:
+        type: string
+        pattern: '^[a-z]{2}$'
+        examples:
+          - us
+    Realm:
+      name: realm
+      in: path
+      required: true
+      description: World of Warcraft realm slug or realm name accepted by the upstream provider.
+      schema:
+        type: string
+        minLength: 1
+        examples:
+          - nagrand
+    Character:
+      name: character
+      in: path
+      required: true
+      description: World of Warcraft character name.
+      schema:
+        type: string
+        minLength: 1
+        examples:
+          - bixposter
+  responses:
+    BadRequest:
+      description: Invalid request. The error code is `INVALID_REQUEST`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalidRequest:
+              value:
+                schemaVersion: 1
+                error:
+                  code: INVALID_REQUEST
+                  message: The request is invalid.
+    CharacterNotFound:
+      description: The character could not be resolved by the upstream provider. The error code is `CHARACTER_NOT_FOUND`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            characterNotFound:
+              value:
+                schemaVersion: 1
+                error:
+                  code: CHARACTER_NOT_FOUND
+                  message: Character data is not available.
+    ConfigurationUnavailable:
+      description: No valid active-season configuration is available. The error code is `ACTIVE_CONFIGURATION_UNAVAILABLE`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            configurationUnavailable:
+              value:
+                schemaVersion: 1
+                error:
+                  code: ACTIVE_CONFIGURATION_UNAVAILABLE
+                  message: Active application configuration is unavailable.
+    CharacterProgressUnavailable:
+      description: |
+        Character progress could not be calculated. If no valid active-season
+        configuration exists, the error code is
+        `ACTIVE_CONFIGURATION_UNAVAILABLE`; if character or Journal data is
+        unavailable, the error code is `UPSTREAM_UNAVAILABLE`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            configurationUnavailable:
+              value:
+                schemaVersion: 1
+                error:
+                  code: ACTIVE_CONFIGURATION_UNAVAILABLE
+                  message: Active application configuration is unavailable.
+            upstreamUnavailable:
+              value:
+                schemaVersion: 1
+                error:
+                  code: UPSTREAM_UNAVAILABLE
+                  message: Required upstream data is unavailable.
+  schemas:
+    AppConfigResponse:
+      type: object
+      required:
+        - schemaVersion
+        - activeSeason
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        activeSeason:
+          $ref: '#/components/schemas/SeasonSnapshot'
+    CharacterProgressResponse:
+      type: object
+      required:
+        - schemaVersion
+        - character
+        - season
+        - progressPeriod
+        - sections
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        character:
+          $ref: '#/components/schemas/CharacterIdentity'
+        season:
+          $ref: '#/components/schemas/SeasonSnapshot'
+        progressPeriod:
+          $ref: '#/components/schemas/ProgressPeriod'
+        sections:
+          type: array
+          description: Ordered activity sections for the character's season snapshot.
+          items:
+            $ref: '#/components/schemas/VaultSection'
+    SeasonSnapshot:
+      type: object
+      required:
+        - id
+        - displayName
+        - shortLabel
+        - expansion
+        - revision
+        - revisionHash
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Stable API-owned public season identifier.
+          examples:
+            - midnight-s2
+        displayName:
+          type: string
+          minLength: 1
+          examples:
+            - Midnight Season 2
+        shortLabel:
+          type: string
+          minLength: 1
+          examples:
+            - Season 2
+        expansion:
+          type: string
+          minLength: 1
+          examples:
+            - Midnight
+        sourceSeasonId:
+          type: integer
+          description: Optional upstream diagnostic identifier. Clients must not use it for rules.
+          examples:
+            - 18
+        revision:
+          type: string
+          minLength: 1
+          description: Immutable API-owned configuration revision identifier.
+          examples:
+            - midnight-s2-r1
+        revisionHash:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: Lowercase SHA-256 content hash for the immutable configuration revision.
+          examples:
+            - sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    ProgressPeriod:
+      type: object
+      required:
+        - resetAt
+        - asOf
+      properties:
+        resetAt:
+          type: string
+          format: date-time
+          description: Start of the canonical Tuesday 15:00 UTC progress period.
+        asOf:
+          type: string
+          format: date-time
+          description: Time at which the API calculated this response.
+    CharacterIdentity:
+      type: object
+      required:
+        - region
+        - realm
+        - name
+      properties:
+        region:
+          type: string
+          minLength: 1
+        realm:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        class:
+          type:
+            - string
+            - 'null'
+          description: Normalized class identifier when available.
+    VaultSection:
+      type: object
+      required:
+        - id
+        - title
+        - kind
+        - status
+        - freshness
+        - slots
+        - additionalItems
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Stable API-owned section identifier.
+        title:
+          type: string
+          minLength: 1
+        subtitle:
+          type:
+            - string
+            - 'null'
+        kind:
+          type: string
+          minLength: 1
+          description: Open activity kind. Unknown values must be safely renderable by clients.
+          examples:
+            - raid
+            - mythic-plus
+            - delves
+        status:
+          type: string
+          minLength: 1
+          description: |
+            Open semantic status such as available, empty, unavailable, or
+            unsupported. Unsupported content remains a section status in an
+            otherwise valid HTTP 200 character response.
+        freshness:
+          type: string
+          minLength: 1
+          description: Open freshness value. The initial values are fresh and stale.
+        slots:
+          type: array
+          items:
+            $ref: '#/components/schemas/VaultSlot'
+        additionalItems:
+          type: array
+          description: Qualifying evidence not selected into a primary slot.
+          items:
+            $ref: '#/components/schemas/ProgressItem'
+    VaultSlot:
+      type: object
+      required:
+        - id
+        - requirement
+        - progress
+        - reward
+        - items
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Stable API-owned slot identifier.
+        requirement:
+          $ref: '#/components/schemas/SlotRequirement'
+        progress:
+          $ref: '#/components/schemas/SlotProgress'
+        reward:
+          $ref: '#/components/schemas/Reward'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProgressItem'
+    SlotRequirement:
+      type: object
+      required:
+        - unit
+        - required
+        - label
+      properties:
+        unit:
+          type: string
+          minLength: 1
+          description: Open machine-readable unit such as bosses, runs, or delves.
+        required:
+          type: integer
+          minimum: 0
+        label:
+          type: string
+          minLength: 1
+          description: API-owned human-readable requirement label.
+    SlotProgress:
+      type: object
+      required:
+        - completed
+        - state
+      properties:
+        completed:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+          description: Completed amount. Null when the slot progress is unavailable or unknown.
+        state:
+          type: string
+          minLength: 1
+          description: Open semantic progress state. The slot requirement's required value is authoritative.
+    ProgressItem:
+      type: object
+      required:
+        - id
+        - label
+        - state
+      properties:
+        id:
+          type: string
+          minLength: 1
+          description: Stable typed machine identifier.
+        label:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          description: Open state such as complete, incomplete, unavailable, unsupported, or unknown.
+        itemLevel:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        rarity:
+          type:
+            - string
+            - 'null'
+          description: Open semantic rarity value. The frontend owns visual fallback mapping.
+        progress:
+          $ref: '#/components/schemas/ProgressData'
+        tooltip:
+          anyOf:
+            - $ref: '#/components/schemas/Tooltip'
+            - type: 'null'
+    ProgressData:
+      type: object
+      description: Generic structured progress shared by activity-specific items.
+      properties:
+        value:
+          description: Optional scalar activity value such as a Mythic+ level or Delve count.
+          oneOf:
+            - type: number
+            - type: string
+            - type: 'null'
+        completed:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        required:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        dimensions:
+          type: array
+          description: Nested progress dimensions such as raid difficulty rows.
+          items:
+            $ref: '#/components/schemas/ProgressDimension'
+    ProgressDimension:
+      type: object
+      required:
+        - id
+        - label
+        - state
+      properties:
+        id:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          minLength: 1
+        state:
+          type: string
+          minLength: 1
+        value:
+          description: Optional dimension value.
+          oneOf:
+            - type: number
+            - type: string
+            - type: 'null'
+        completed:
+          type:
+            - boolean
+            - 'null'
+    Tooltip:
+      type: object
+      required:
+        - title
+        - rows
+      properties:
+        title:
+          type: string
+          minLength: 1
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TooltipRow'
+    TooltipRow:
+      type: object
+      required:
+        - label
+      properties:
+        label:
+          type: string
+          minLength: 1
+        value:
+          type:
+            - string
+            - 'null'
+        state:
+          type:
+            - string
+            - 'null'
+        completed:
+          type:
+            - boolean
+            - 'null'
+    Reward:
+      type: object
+      description: Always present for a slot. Null fields represent an unmet slot requirement.
+      required:
+        - itemLevel
+        - rarity
+      properties:
+        itemLevel:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        rarity:
+          type:
+            - string
+            - 'null'
+          description: Open semantic rarity value.
+    ErrorResponse:
+      type: object
+      required:
+        - schemaVersion
+        - error
+      properties:
+        schemaVersion:
+          $ref: '#/components/schemas/SchemaVersion'
+        error:
+          $ref: '#/components/schemas/Error'
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          minLength: 1
+          description: |
+            Open machine-readable error code. Defined initial codes are
+            INVALID_REQUEST, CHARACTER_NOT_FOUND,
+            ACTIVE_CONFIGURATION_UNAVAILABLE, and UPSTREAM_UNAVAILABLE.
+          examples:
+            - INVALID_REQUEST
+            - CHARACTER_NOT_FOUND
+            - ACTIVE_CONFIGURATION_UNAVAILABLE
+            - UPSTREAM_UNAVAILABLE
+        message:
+          type: string
+          minLength: 1
+        requestId:
+          type:
+            - string
+            - 'null'
+    SchemaVersion:
+      type: integer
+      const: 1
+    LegacyProgressResponse:
+      type: object
+      description: Legacy response keyed by the constructed character-name/realm string.
+      additionalProperties:
+        $ref: '#/components/schemas/LegacyCharacterProgress'
+    LegacyCharacterProgress:
+      type: object
+      required:
+        - player_class
+        - raid
+        - dungeons
+        - delves
+        - season
+      properties:
+        player_class:
+          type:
+            - string
+            - 'null'
+        raid:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/LegacyBossProgress'
+        dungeons:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegacyDungeonRun'
+        delves:
+          type: object
+          additionalProperties:
+            type: integer
+        season:
+          type:
+            - integer
+            - 'null'
+    LegacyBossProgress:
+      type: object
+      additionalProperties:
+        type: boolean
+      properties:
+        mythic:
+          type: boolean
+        heroic:
+          type: boolean
+        normal:
+          type: boolean
+        lfr:
+          type: boolean
+    LegacyDungeonRun:
+      type: object
+      required:
+        - level
+        - name
+      properties:
+        level:
+          type: integer
+        name:
+          type: string
