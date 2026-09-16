@@ -65,7 +65,7 @@ paths:
         '404':
           $ref: '#/components/responses/CharacterNotFound'
         '503':
-          $ref: '#/components/responses/UpstreamUnavailable'
+          $ref: '#/components/responses/CharacterProgressUnavailable'
   /vault-progress/{region}/{realm}/{character}:
     get:
       deprecated: true
@@ -93,7 +93,7 @@ paths:
         '404':
           $ref: '#/components/responses/CharacterNotFound'
         '503':
-          $ref: '#/components/responses/UpstreamUnavailable'
+          $ref: '#/components/responses/CharacterProgressUnavailable'
 components:
   parameters:
     Region:
@@ -166,13 +166,23 @@ components:
                 error:
                   code: ACTIVE_CONFIGURATION_UNAVAILABLE
                   message: Active application configuration is unavailable.
-    UpstreamUnavailable:
-      description: Required upstream metadata or character data is unavailable. The error code is `UPSTREAM_UNAVAILABLE`.
+    CharacterProgressUnavailable:
+      description: |
+        Character progress could not be calculated. If no valid active-season
+        configuration exists, the error code is
+        `ACTIVE_CONFIGURATION_UNAVAILABLE`; if character or Journal data is
+        unavailable, the error code is `UPSTREAM_UNAVAILABLE`.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
           examples:
+            configurationUnavailable:
+              value:
+                schemaVersion: 1
+                error:
+                  code: ACTIVE_CONFIGURATION_UNAVAILABLE
+                  message: Active application configuration is unavailable.
             upstreamUnavailable:
               value:
                 schemaVersion: 1
@@ -363,9 +373,7 @@ components:
         progress:
           $ref: '#/components/schemas/SlotProgress'
         reward:
-          anyOf:
-            - $ref: '#/components/schemas/Reward'
-            - type: 'null'
+          $ref: '#/components/schemas/Reward'
         items:
           type: array
           items:
@@ -523,6 +531,7 @@ components:
             - 'null'
     Reward:
       type: object
+      description: Always present for a slot. Null fields represent an unmet slot requirement.
       required:
         - itemLevel
         - rarity
