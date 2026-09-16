@@ -38,7 +38,10 @@ public class FunctionTests
         public Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character) =>
             Task.FromResult(new BlizzardEncounterResponse());
 
-        public Task<BlizzardJournalMetadata?> GetJournalInstance(string region, long instanceId) =>
+        public Task<BlizzardJournalMetadata?> GetJournalInstance(
+            string region,
+            long instanceId,
+            CancellationToken cancellationToken = default) =>
             Task.FromResult<BlizzardJournalMetadata?>(null);
 
         public Task<int?> GetSeason(string region) => Task.FromResult<int?>(null);

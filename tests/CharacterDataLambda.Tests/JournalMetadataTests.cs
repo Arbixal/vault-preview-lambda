@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using VaultPreview.Blizzard;
 using VaultPreview.Blizzard.Models;
+using VaultPreview.VaultCache;
 using VaultShared;
 using VaultShared.Seasons;
 using Xunit;
@@ -77,6 +78,26 @@ public class JournalMetadataTests
     }
 
     [Fact]
+    public async Task Provider_FetchesPolicyInstancesWithoutCharacterProgress()
+    {
+        SeasonActivityDefinition activity = new(
+            "raid",
+            "raid",
+            "Raids",
+            null,
+            0,
+            [],
+            ["wow:journal-instance:1320", "wow:journal-instance:1317"]);
+        FakeBlizzardApiHandler apiHandler = new();
+        BlizzardJournalMetadataProvider provider = new(apiHandler);
+
+        IReadOnlyList<BlizzardJournalMetadata> metadata = await provider.GetEligibleInstances("us", activity);
+
+        Assert.Equal([1320, 1317], apiHandler.RequestedInstanceIds);
+        Assert.Equal([1320, 1317], metadata.Select(x => x.Instance.Id));
+    }
+
+    [Fact]
     public async Task GetJournalInstance_CachesMetadataForWarmHandler()
     {
         FakeJournalHttpHandler httpHandler = new();
@@ -96,6 +117,57 @@ public class JournalMetadataTests
         Assert.Equal(1, httpHandler.RequestCount);
         Assert.Contains("static-us", httpHandler.LastRequestUri!.Query);
         Assert.Contains("journal-instance/1320", httpHandler.LastRequestUri.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task GetJournalInstance_UsesStaleEntryAfterTransientFailure()
+    {
+        FakeJournalMetadataCache cache = new();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        cache.Seed("us", "static-us", 1320, new JournalMetadataCacheEntry(
+            new BlizzardJournalInstance { Id = 1320, Name = "Cached Raid" },
+            now.AddDays(-2),
+            now.AddHours(-1),
+            now.AddDays(5)));
+        BlizzardApiHandler handler = new(
+            new FakeHttpClientFactory(new FakeJournalHttpHandler(HttpStatusCode.InternalServerError)),
+            new FakeSecretHandler(),
+            cache);
+
+        await handler.Connect();
+        BlizzardJournalMetadata? result = await handler.GetJournalInstance("us", 1320);
+
+        Assert.NotNull(result);
+        Assert.True(result.IsStale);
+        Assert.Equal("Cached Raid", result.Instance.Name);
+    }
+
+    [Fact]
+    public async Task GetJournalInstance_DoesNotUseExpiredStaleEntry()
+    {
+        FakeJournalMetadataCache cache = new();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        cache.Seed("us", "static-us", 1320, new JournalMetadataCacheEntry(
+            new BlizzardJournalInstance { Id = 1320, Name = "Expired Raid" },
+            now.AddDays(-8),
+            now.AddDays(-7),
+            now.AddMinutes(-1)));
+        BlizzardApiHandler handler = new(
+            new FakeHttpClientFactory(new FakeJournalHttpHandler(HttpStatusCode.InternalServerError)),
+            new FakeSecretHandler(),
+            cache);
+
+        await handler.Connect();
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => handler.GetJournalInstance("us", 1320));
+    }
+
+    [Fact]
+    public async Task S3CacheDeserializer_IgnoresCorruptContent()
+    {
+        using MemoryStream stream = new(Encoding.UTF8.GetBytes("{not-json"));
+
+        Assert.Null(await S3JournalMetadataCache.Deserialize(stream));
     }
 
     [Fact]
@@ -126,6 +198,45 @@ public class JournalMetadataTests
             _entries[$"{region}:{staticNamespace}:{instanceId}"] = entry;
             return Task.CompletedTask;
         }
+
+        public void Seed(string region, string staticNamespace, long instanceId, JournalMetadataCacheEntry entry)
+        {
+            _entries[$"{region}:{staticNamespace}:{instanceId}"] = entry;
+        }
+    }
+
+    private sealed class FakeBlizzardApiHandler : IBlizzardApiHandler
+    {
+        public IList<long> RequestedInstanceIds { get; } = [];
+
+        public Task Connect() => Task.CompletedTask;
+
+        public Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character) =>
+            Task.FromResult(new BlizzardEncounterResponse());
+
+        public Task<BlizzardJournalMetadata?> GetJournalInstance(
+            string region,
+            long instanceId,
+            CancellationToken cancellationToken = default)
+        {
+            RequestedInstanceIds.Add(instanceId);
+            return Task.FromResult<BlizzardJournalMetadata?>(new BlizzardJournalMetadata(
+                new BlizzardJournalInstance
+                {
+                    Id = instanceId,
+                    Name = $"Journal instance {instanceId}",
+                    Encounters = [new BlizzardJournalEncounter { Id = instanceId + 1, Name = "Encounter" }]
+                },
+                false,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddDays(1),
+                DateTimeOffset.UtcNow.AddDays(7)));
+        }
+
+        public Task<int?> GetSeason(string region) => Task.FromResult<int?>(18);
+
+        public Task<Dictionary<int, int>> GetDelveStatistics(string region, string realm, string character) =>
+            Task.FromResult(new Dictionary<int, int>());
     }
 
     private sealed class FakeHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
@@ -157,7 +268,7 @@ public class JournalMetadataTests
         {
             ++RequestCount;
             LastRequestUri = request.RequestUri;
-            const string content = "{\"id\":1320,\"name\":\"The Venomous Abyss\",\"encounters\":[{\"id\":2888,\"name\":\"Nek'zali the Soulcoiler\"}]}";
+            const string content = "{\"id\":1320,\"name\":\"The Venomous Abyss\",\"future_field\":\"ignored\",\"encounters\":[{\"id\":2888,\"name\":\"Nek'zali the Soulcoiler\"}]}";
             return Task.FromResult(new HttpResponseMessage(statusCode)
             {
                 Content = new StringContent(content, Encoding.UTF8, "application/json")

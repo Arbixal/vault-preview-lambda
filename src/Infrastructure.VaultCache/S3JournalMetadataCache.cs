@@ -23,7 +23,7 @@ public sealed class S3JournalMetadataCache(IAmazonS3 s3Client) : IJournalMetadat
                 Key = _getKey(region, staticNamespace, instanceId)
             });
 
-            return await JsonSerializer.DeserializeAsync<JournalMetadataCacheEntry>(response.ResponseStream);
+            return await Deserialize(response.ResponseStream);
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -32,6 +32,16 @@ public sealed class S3JournalMetadataCache(IAmazonS3 s3Client) : IJournalMetadat
         catch (AmazonS3Exception exception)
         {
             Console.WriteLine($"Unable to read Journal metadata cache: {exception.Message}");
+            return null;
+        }
+        catch (JsonException exception)
+        {
+            Console.WriteLine($"Ignoring invalid Journal metadata cache content: {exception.Message}");
+            return null;
+        }
+        catch (NotSupportedException exception)
+        {
+            Console.WriteLine($"Ignoring unsupported Journal metadata cache content: {exception.Message}");
             return null;
         }
     }
@@ -70,5 +80,21 @@ public sealed class S3JournalMetadataCache(IAmazonS3 s3Client) : IJournalMetadat
             Uri.EscapeDataString(region.Trim().ToLowerInvariant()),
             Uri.EscapeDataString(staticNamespace.Trim().ToLowerInvariant()),
             instanceId);
+    }
+
+    internal static async Task<JournalMetadataCacheEntry?> Deserialize(Stream stream)
+    {
+        try
+        {
+            return await JsonSerializer.DeserializeAsync<JournalMetadataCacheEntry>(stream);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        catch (NotSupportedException)
+        {
+            return null;
+        }
     }
 }

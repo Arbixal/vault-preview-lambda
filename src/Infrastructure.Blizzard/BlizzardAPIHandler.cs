@@ -1,6 +1,7 @@
 ﻿using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using VaultPreview.Blizzard.Models;
 using VaultShared;
 using VaultShared.Models.Blizzard;
@@ -11,7 +12,10 @@ public interface IBlizzardApiHandler
 {
     Task Connect();
     Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character);
-    Task<BlizzardJournalMetadata?> GetJournalInstance(string region, long instanceId);
+    Task<BlizzardJournalMetadata?> GetJournalInstance(
+        string region,
+        long instanceId,
+        CancellationToken cancellationToken = default);
 
     Task<int?> GetSeason(string region);
 
@@ -122,7 +126,10 @@ public class BlizzardApiHandler(
         return response ?? new BlizzardEncounterResponse();
     }
 
-    public async Task<BlizzardJournalMetadata?> GetJournalInstance(string region, long instanceId)
+    public async Task<BlizzardJournalMetadata?> GetJournalInstance(
+        string region,
+        long instanceId,
+        CancellationToken cancellationToken = default)
     {
         if (instanceId <= 0)
             throw new ArgumentOutOfRangeException(nameof(instanceId), "Journal instance ID must be positive.");
@@ -148,7 +155,8 @@ public class BlizzardApiHandler(
         try
         {
             response = await client.GetFromJsonAsync<BlizzardJournalInstance>(
-                $"/data/wow/journal-instance/{instanceId}?namespace={settings.StaticNamespace}&locale={settings.Locale}");
+                $"/data/wow/journal-instance/{instanceId}?namespace={settings.StaticNamespace}&locale={settings.Locale}",
+                cancellationToken);
         }
         catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -158,6 +166,28 @@ public class BlizzardApiHandler(
         catch (HttpRequestException exception) when (cached != null && cached.StaleUntil > now)
         {
             Console.WriteLine($"Using stale Journal metadata for instance '{instanceId}': {exception.Message}");
+            return new BlizzardJournalMetadata(
+                cached.Instance,
+                true,
+                cached.FetchedAt,
+                cached.ExpiresAt,
+                cached.StaleUntil);
+        }
+        catch (JsonException exception) when (cached != null && cached.StaleUntil > now)
+        {
+            Console.WriteLine($"Using stale Journal metadata after an invalid response for instance '{instanceId}': {exception.Message}");
+            return new BlizzardJournalMetadata(
+                cached.Instance,
+                true,
+                cached.FetchedAt,
+                cached.ExpiresAt,
+                cached.StaleUntil);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested &&
+                                                 cached != null &&
+                                                 cached.StaleUntil > now)
+        {
+            Console.WriteLine($"Using stale Journal metadata after a timeout for instance '{instanceId}'.");
             return new BlizzardJournalMetadata(
                 cached.Instance,
                 true,

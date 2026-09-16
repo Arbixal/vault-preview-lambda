@@ -19,6 +19,18 @@ public static class JournalMetadataResolver
             .ToList();
     }
 
+    public static IReadOnlyList<long> GetEligibleInstanceIds(SeasonActivityDefinition activity)
+    {
+        ArgumentNullException.ThrowIfNull(activity);
+
+        return activity.SourceIds
+            .Select(_parseInstanceId)
+            .Where(instanceId => instanceId.HasValue)
+            .Select(instanceId => instanceId!.Value)
+            .Distinct()
+            .ToList();
+    }
+
     public static IReadOnlyList<BlizzardJournalInstance> SelectEligibleInstances(
         SeasonActivityDefinition activity,
         IEnumerable<BlizzardJournalInstance> instances)
@@ -26,11 +38,9 @@ public static class JournalMetadataResolver
         ArgumentNullException.ThrowIfNull(activity);
         ArgumentNullException.ThrowIfNull(instances);
 
-        IReadOnlyDictionary<long, int> orderByInstanceId = activity.SourceIds
-            .Select((sourceId, order) => (sourceId, order))
-            .Select(x => (instanceId: _parseInstanceId(x.sourceId), x.order))
-            .Where(x => x.instanceId.HasValue)
-            .ToDictionary(x => x.instanceId!.Value, x => x.order);
+        IReadOnlyDictionary<long, int> orderByInstanceId = GetEligibleInstanceIds(activity)
+            .Select((instanceId, order) => (instanceId, order))
+            .ToDictionary(x => x.instanceId, x => x.order);
 
         return instances
             .Where(instance => orderByInstanceId.ContainsKey(instance.Id))
