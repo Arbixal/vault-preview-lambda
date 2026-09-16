@@ -1,7 +1,7 @@
 using VaultShared.Seasons;
 using Xunit;
 
-namespace CharacterDataLambda.Tests;
+namespace VaultShared.Tests;
 
 public class SeasonConfigurationTests
 {
