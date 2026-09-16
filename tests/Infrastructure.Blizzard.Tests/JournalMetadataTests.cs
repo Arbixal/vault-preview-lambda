@@ -2,12 +2,11 @@ using System.Net;
 using System.Text;
 using VaultPreview.Blizzard;
 using VaultPreview.Blizzard.Models;
-using VaultPreview.VaultCache;
 using VaultShared;
 using VaultShared.Seasons;
 using Xunit;
 
-namespace CharacterDataLambda.Tests;
+namespace Infrastructure.Blizzard.Tests;
 
 public class JournalMetadataTests
 {
@@ -160,27 +159,6 @@ public class JournalMetadataTests
         await handler.Connect();
 
         await Assert.ThrowsAsync<HttpRequestException>(() => handler.GetJournalInstance("us", 1320));
-    }
-
-    [Fact]
-    public async Task S3CacheDeserializer_IgnoresCorruptContent()
-    {
-        using MemoryStream stream = new(Encoding.UTF8.GetBytes("{not-json"));
-
-        Assert.Null(await S3JournalMetadataCache.Deserialize(stream));
-    }
-
-    [Fact]
-    public void S3CacheValidation_RejectsSemanticallyInvalidContent()
-    {
-        DateTimeOffset now = DateTimeOffset.UtcNow;
-        JournalMetadataCacheEntry invalidEntry = new(
-            new BlizzardJournalInstance { Id = 0, Name = string.Empty },
-            now.AddHours(1),
-            now,
-            now.AddDays(1));
-
-        Assert.False(S3JournalMetadataCache.IsValid(invalidEntry));
     }
 
     [Fact]
