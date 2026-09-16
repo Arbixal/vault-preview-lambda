@@ -2,6 +2,7 @@
 using Amazon.S3;
 using Microsoft.Extensions.DependencyInjection;
 using VaultPreview.Blizzard;
+using VaultPreviewLambda.Calculations;
 using VaultPreview.RaiderIo;
 using VaultPreview.VaultCache;
 using VaultShared;
@@ -15,6 +16,7 @@ public class Startup
     {
         services.AddSingleton<IBlizzardApiHandler, BlizzardApiHandler>();
         services.AddSingleton<BlizzardJournalMetadataProvider>();
+        services.AddSingleton<VaultProgressCalculator>();
         services.AddSingleton<IRaiderIoHandler, RaiderIoHandler>();
         services.AddSingleton<ISecretHandler, SecretHandler>();
         services.AddSingleton<IVaultCacheHandler, VaultCacheHandler>();
