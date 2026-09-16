@@ -12,7 +12,8 @@ info:
     mappings, and semantic presentation data. Activity kinds, statuses,
     freshness values, and rarity values are intentionally open strings so a
     future season can add values without making an older client reject the
-    complete response.
+    complete response. Clients must ignore unknown optional properties and
+    preserve known data when a response contains additive fields.
 servers:
   - url: https://api.example.invalid
     description: Placeholder server. Deployment supplies the production URL.
@@ -41,7 +42,7 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '503':
-          $ref: '#/components/responses/ServiceUnavailable'
+          $ref: '#/components/responses/ConfigurationUnavailable'
   /v1/vault-progress/{region}/{realm}/{character}:
     get:
       tags:
@@ -64,7 +65,7 @@ paths:
         '404':
           $ref: '#/components/responses/CharacterNotFound'
         '503':
-          $ref: '#/components/responses/ServiceUnavailable'
+          $ref: '#/components/responses/UpstreamUnavailable'
   /vault-progress/{region}/{realm}/{character}:
     get:
       deprecated: true
@@ -92,7 +93,7 @@ paths:
         '404':
           $ref: '#/components/responses/CharacterNotFound'
         '503':
-          $ref: '#/components/responses/ServiceUnavailable'
+          $ref: '#/components/responses/UpstreamUnavailable'
 components:
   parameters:
     Region:
@@ -127,27 +128,60 @@ components:
           - bixposter
   responses:
     BadRequest:
-      description: The request is invalid.
+      description: Invalid request. The error code is `INVALID_REQUEST`.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            invalidRequest:
+              value:
+                schemaVersion: 1
+                error:
+                  code: INVALID_REQUEST
+                  message: The request is invalid.
     CharacterNotFound:
-      description: The character could not be resolved by the upstream provider.
+      description: The character could not be resolved by the upstream provider. The error code is `CHARACTER_NOT_FOUND`.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
-    ServiceUnavailable:
-      description: A required configuration or upstream dependency is unavailable.
+          examples:
+            characterNotFound:
+              value:
+                schemaVersion: 1
+                error:
+                  code: CHARACTER_NOT_FOUND
+                  message: Character data is not available.
+    ConfigurationUnavailable:
+      description: No valid active-season configuration is available. The error code is `ACTIVE_CONFIGURATION_UNAVAILABLE`.
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            configurationUnavailable:
+              value:
+                schemaVersion: 1
+                error:
+                  code: ACTIVE_CONFIGURATION_UNAVAILABLE
+                  message: Active application configuration is unavailable.
+    UpstreamUnavailable:
+      description: Required upstream metadata or character data is unavailable. The error code is `UPSTREAM_UNAVAILABLE`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            upstreamUnavailable:
+              value:
+                schemaVersion: 1
+                error:
+                  code: UPSTREAM_UNAVAILABLE
+                  message: Required upstream data is unavailable.
   schemas:
     AppConfigResponse:
       type: object
-      additionalProperties: false
       required:
         - schemaVersion
         - activeSeason
@@ -158,7 +192,6 @@ components:
           $ref: '#/components/schemas/SeasonSnapshot'
     CharacterProgressResponse:
       type: object
-      additionalProperties: false
       required:
         - schemaVersion
         - character
@@ -181,7 +214,6 @@ components:
             $ref: '#/components/schemas/VaultSection'
     SeasonSnapshot:
       type: object
-      additionalProperties: false
       required:
         - id
         - displayName
@@ -224,13 +256,12 @@ components:
             - midnight-s2-r1
         revisionHash:
           type: string
-          minLength: 1
-          description: Content hash for the immutable configuration revision.
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: Lowercase SHA-256 content hash for the immutable configuration revision.
           examples:
-            - sha256:example-content-hash
+            - sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     ProgressPeriod:
       type: object
-      additionalProperties: false
       required:
         - resetAt
         - asOf
@@ -245,7 +276,6 @@ components:
           description: Time at which the API calculated this response.
     CharacterIdentity:
       type: object
-      additionalProperties: false
       required:
         - region
         - realm
@@ -267,7 +297,6 @@ components:
           description: Normalized class identifier when available.
     VaultSection:
       type: object
-      additionalProperties: false
       required:
         - id
         - title
@@ -299,7 +328,10 @@ components:
         status:
           type: string
           minLength: 1
-          description: Open semantic status such as available, empty, unavailable, or unsupported.
+          description: |
+            Open semantic status such as available, empty, unavailable, or
+            unsupported. Unsupported content remains a section status in an
+            otherwise valid HTTP 200 character response.
         freshness:
           type: string
           minLength: 1
@@ -315,7 +347,6 @@ components:
             $ref: '#/components/schemas/ProgressItem'
     VaultSlot:
       type: object
-      additionalProperties: false
       required:
         - id
         - requirement
@@ -341,10 +372,10 @@ components:
             $ref: '#/components/schemas/ProgressItem'
     SlotRequirement:
       type: object
-      additionalProperties: false
       required:
         - unit
         - required
+        - label
       properties:
         unit:
           type: string
@@ -355,26 +386,26 @@ components:
           minimum: 0
         label:
           type: string
-          description: Optional human-readable requirement label.
+          minLength: 1
+          description: API-owned human-readable requirement label.
     SlotProgress:
       type: object
-      additionalProperties: false
       required:
         - completed
-        - required
+        - state
       properties:
         completed:
-          type: integer
+          type:
+            - integer
+            - 'null'
           minimum: 0
-        required:
-          type: integer
-          minimum: 0
+          description: Completed amount. Null when the slot progress is unavailable or unknown.
         state:
           type: string
-          description: Open semantic progress state.
+          minLength: 1
+          description: Open semantic progress state. The slot requirement's required value is authoritative.
     ProgressItem:
       type: object
-      additionalProperties: false
       required:
         - id
         - label
@@ -408,7 +439,6 @@ components:
             - type: 'null'
     ProgressData:
       type: object
-      additionalProperties: false
       description: Generic structured progress shared by activity-specific items.
       properties:
         value:
@@ -434,7 +464,6 @@ components:
             $ref: '#/components/schemas/ProgressDimension'
     ProgressDimension:
       type: object
-      additionalProperties: false
       required:
         - id
         - label
@@ -461,7 +490,6 @@ components:
             - 'null'
     Tooltip:
       type: object
-      additionalProperties: false
       required:
         - title
         - rows
@@ -475,7 +503,6 @@ components:
             $ref: '#/components/schemas/TooltipRow'
     TooltipRow:
       type: object
-      additionalProperties: false
       required:
         - label
       properties:
@@ -496,7 +523,6 @@ components:
             - 'null'
     Reward:
       type: object
-      additionalProperties: false
       required:
         - itemLevel
         - rarity
@@ -513,7 +539,6 @@ components:
           description: Open semantic rarity value.
     ErrorResponse:
       type: object
-      additionalProperties: false
       required:
         - schemaVersion
         - error
@@ -524,7 +549,6 @@ components:
           $ref: '#/components/schemas/Error'
     Error:
       type: object
-      additionalProperties: false
       required:
         - code
         - message
@@ -532,7 +556,15 @@ components:
         code:
           type: string
           minLength: 1
-          description: Open machine-readable error code.
+          description: |
+            Open machine-readable error code. Defined initial codes are
+            INVALID_REQUEST, CHARACTER_NOT_FOUND,
+            ACTIVE_CONFIGURATION_UNAVAILABLE, and UPSTREAM_UNAVAILABLE.
+          examples:
+            - INVALID_REQUEST
+            - CHARACTER_NOT_FOUND
+            - ACTIVE_CONFIGURATION_UNAVAILABLE
+            - UPSTREAM_UNAVAILABLE
         message:
           type: string
           minLength: 1
@@ -550,7 +582,6 @@ components:
         $ref: '#/components/schemas/LegacyCharacterProgress'
     LegacyCharacterProgress:
       type: object
-      additionalProperties: false
       required:
         - player_class
         - raid
@@ -593,7 +624,6 @@ components:
           type: boolean
     LegacyDungeonRun:
       type: object
-      additionalProperties: false
       required:
         - level
         - name
