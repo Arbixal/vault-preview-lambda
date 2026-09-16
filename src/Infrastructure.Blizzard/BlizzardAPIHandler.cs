@@ -11,6 +11,7 @@ public interface IBlizzardApiHandler
 {
     Task Connect();
     Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character);
+    Task<BlizzardJournalInstance?> GetJournalInstance(string region, long instanceId);
 
     Task<int?> GetSeason(string region);
 
@@ -33,23 +34,28 @@ public class BlizzardApiHandler(
     private const long _TIER9_DELVE = 40774;
     private const long _TIER10_DELVE = 40775;
     private const long _TIER11_DELVE = 40776;
-    
+    private static readonly TimeSpan _JOURNAL_CACHE_TTL = TimeSpan.FromHours(24);
+
     private string? _token;
+    private readonly object _journalCacheLock = new();
+    private readonly IDictionary<string, JournalCacheEntry> _journalInstanceCache =
+        new Dictionary<string, JournalCacheEntry>(StringComparer.OrdinalIgnoreCase);
 
     private sealed record RegionSettings(
         string BaseUrl,
         string ProfileNamespace,
         string DynamicNamespace,
+        string StaticNamespace,
         string Locale);
 
     private static readonly IReadOnlyDictionary<string, RegionSettings> _regionSettings =
         new Dictionary<string, RegionSettings>(StringComparer.OrdinalIgnoreCase)
     {
-        ["us"] = new("https://us.api.blizzard.com", "profile-us", "dynamic-us", "en_US"),
-        ["eu"] = new("https://eu.api.blizzard.com", "profile-eu", "dynamic-eu", "en_GB"),
-        ["kr"] = new("https://kr.api.blizzard.com", "profile-kr", "dynamic-kr", "ko_KR"),
-        ["tw"] = new("https://tw.api.blizzard.com", "profile-tw", "dynamic-tw", "zh_TW"),
-        ["cn"] = new("https://gateway.battlenet.com.cn", "profile-cn", "dynamic-cn", "zh_CN"),
+        ["us"] = new("https://us.api.blizzard.com", "profile-us", "dynamic-us", "static-us", "en_US"),
+        ["eu"] = new("https://eu.api.blizzard.com", "profile-eu", "dynamic-eu", "static-eu", "en_GB"),
+        ["kr"] = new("https://kr.api.blizzard.com", "profile-kr", "dynamic-kr", "static-kr", "ko_KR"),
+        ["tw"] = new("https://tw.api.blizzard.com", "profile-tw", "dynamic-tw", "static-tw", "zh_TW"),
+        ["cn"] = new("https://gateway.battlenet.com.cn", "profile-cn", "dynamic-cn", "static-cn", "zh_CN"),
     };
 
     private static readonly IReadOnlyDictionary<long, int> _delveTierByStatistic =
@@ -115,6 +121,42 @@ public class BlizzardApiHandler(
             $"/profile/wow/character/{_slug(realm)}/{_slug(character)}/encounters/raids?namespace={settings.ProfileNamespace}&locale={settings.Locale}");
 
         return response ?? new BlizzardEncounterResponse();
+    }
+
+    public async Task<BlizzardJournalInstance?> GetJournalInstance(string region, long instanceId)
+    {
+        if (instanceId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(instanceId), "Journal instance ID must be positive.");
+
+        RegionSettings settings = _getRegionSettings(region);
+        string cacheKey = $"{settings.StaticNamespace}:{instanceId}";
+        if (_tryGetJournalCache(cacheKey, out BlizzardJournalInstance? cached))
+            return cached;
+
+        HttpClient client = _getClient(settings);
+        BlizzardJournalInstance? response;
+        try
+        {
+            response = await client.GetFromJsonAsync<BlizzardJournalInstance>(
+                $"/data/wow/journal-instance/{instanceId}?namespace={settings.StaticNamespace}&locale={settings.Locale}");
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            Console.WriteLine($"Journal instance '{instanceId}' was not found in region '{region}'.");
+            return null;
+        }
+
+        if (response != null)
+        {
+            lock (_journalCacheLock)
+            {
+                _journalInstanceCache[cacheKey] = new JournalCacheEntry(
+                    response,
+                    DateTimeOffset.UtcNow.Add(_JOURNAL_CACHE_TTL));
+            }
+        }
+
+        return response;
     }
 
     public async Task<int?> GetSeason(string region)
@@ -197,6 +239,26 @@ public class BlizzardApiHandler(
         return response ?? new BlizzardCharacterStatisticsResponse();
     }
 
+    private bool _tryGetJournalCache(string cacheKey, out BlizzardJournalInstance? instance)
+    {
+        lock (_journalCacheLock)
+        {
+            if (_journalInstanceCache.TryGetValue(cacheKey, out JournalCacheEntry? entry))
+            {
+                if (entry.ExpiresAt > DateTimeOffset.UtcNow)
+                {
+                    instance = entry.Instance;
+                    return true;
+                }
+
+                _journalInstanceCache.Remove(cacheKey);
+            }
+        }
+
+        instance = null;
+        return false;
+    }
+
     private RegionSettings _getRegionSettings(string region)
     {
         string normalizedRegion = region.Trim().ToLowerInvariant();
@@ -228,4 +290,8 @@ public class BlizzardApiHandler(
         byte[] plainTextBytes = Encoding.UTF8.GetBytes(plainText);
         return Convert.ToBase64String(plainTextBytes);
     }
+
+    private sealed record JournalCacheEntry(
+        BlizzardJournalInstance Instance,
+        DateTimeOffset ExpiresAt);
 }

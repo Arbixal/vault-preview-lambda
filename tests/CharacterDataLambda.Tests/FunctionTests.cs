@@ -38,6 +38,9 @@ public class FunctionTests
         public Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character) =>
             Task.FromResult(new BlizzardEncounterResponse());
 
+        public Task<BlizzardJournalInstance?> GetJournalInstance(string region, long instanceId) =>
+            Task.FromResult<BlizzardJournalInstance?>(null);
+
         public Task<int?> GetSeason(string region) => Task.FromResult<int?>(null);
 
         public Task<Dictionary<int, int>> GetDelveStatistics(string region, string realm, string character)
