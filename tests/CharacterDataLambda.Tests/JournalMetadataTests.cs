@@ -82,14 +82,17 @@ public class JournalMetadataTests
         FakeJournalHttpHandler httpHandler = new();
         BlizzardApiHandler handler = new(
             new FakeHttpClientFactory(httpHandler),
-            new FakeSecretHandler());
+            new FakeSecretHandler(),
+            new FakeJournalMetadataCache());
 
         await handler.Connect();
-        BlizzardJournalInstance? first = await handler.GetJournalInstance("us", 1320);
-        BlizzardJournalInstance? second = await handler.GetJournalInstance("us", 1320);
+        BlizzardJournalMetadata? first = await handler.GetJournalInstance("us", 1320);
+        BlizzardJournalMetadata? second = await handler.GetJournalInstance("us", 1320);
 
         Assert.NotNull(first);
-        Assert.Same(first, second);
+        Assert.NotNull(second);
+        Assert.Equal(first.Instance.Id, second.Instance.Id);
+        Assert.False(second.IsStale);
         Assert.Equal(1, httpHandler.RequestCount);
         Assert.Contains("static-us", httpHandler.LastRequestUri!.Query);
         Assert.Contains("journal-instance/1320", httpHandler.LastRequestUri.AbsolutePath);
@@ -100,11 +103,29 @@ public class JournalMetadataTests
     {
         BlizzardApiHandler handler = new(
             new FakeHttpClientFactory(new FakeJournalHttpHandler(HttpStatusCode.NotFound)),
-            new FakeSecretHandler());
+            new FakeSecretHandler(),
+            new FakeJournalMetadataCache());
 
         await handler.Connect();
 
         Assert.Null(await handler.GetJournalInstance("us", 999999));
+    }
+
+    private sealed class FakeJournalMetadataCache : IJournalMetadataCache
+    {
+        private readonly IDictionary<string, JournalMetadataCacheEntry> _entries = new Dictionary<string, JournalMetadataCacheEntry>();
+
+        public Task<JournalMetadataCacheEntry?> Get(string region, string staticNamespace, long instanceId)
+        {
+            string key = $"{region}:{staticNamespace}:{instanceId}";
+            return Task.FromResult(_entries.TryGetValue(key, out JournalMetadataCacheEntry? entry) ? entry : null);
+        }
+
+        public Task Put(string region, string staticNamespace, long instanceId, JournalMetadataCacheEntry entry)
+        {
+            _entries[$"{region}:{staticNamespace}:{instanceId}"] = entry;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory

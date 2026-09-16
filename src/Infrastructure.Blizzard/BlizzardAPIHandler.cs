@@ -11,7 +11,7 @@ public interface IBlizzardApiHandler
 {
     Task Connect();
     Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character);
-    Task<BlizzardJournalInstance?> GetJournalInstance(string region, long instanceId);
+    Task<BlizzardJournalMetadata?> GetJournalInstance(string region, long instanceId);
 
     Task<int?> GetSeason(string region);
 
@@ -20,7 +20,8 @@ public interface IBlizzardApiHandler
 
 public class BlizzardApiHandler(
     IHttpClientFactory clientFactory,
-    ISecretHandler secretHandler)
+    ISecretHandler secretHandler,
+    IJournalMetadataCache journalMetadataCache)
     : IBlizzardApiHandler
 {
     private const long _TIER1_DELVE = 40766;
@@ -35,11 +36,9 @@ public class BlizzardApiHandler(
     private const long _TIER10_DELVE = 40775;
     private const long _TIER11_DELVE = 40776;
     private static readonly TimeSpan _JOURNAL_CACHE_TTL = TimeSpan.FromHours(24);
+    private static readonly TimeSpan _JOURNAL_STALE_WINDOW = TimeSpan.FromDays(7);
 
     private string? _token;
-    private readonly object _journalCacheLock = new();
-    private readonly IDictionary<string, JournalCacheEntry> _journalInstanceCache =
-        new Dictionary<string, JournalCacheEntry>(StringComparer.OrdinalIgnoreCase);
 
     private sealed record RegionSettings(
         string BaseUrl,
@@ -123,15 +122,26 @@ public class BlizzardApiHandler(
         return response ?? new BlizzardEncounterResponse();
     }
 
-    public async Task<BlizzardJournalInstance?> GetJournalInstance(string region, long instanceId)
+    public async Task<BlizzardJournalMetadata?> GetJournalInstance(string region, long instanceId)
     {
         if (instanceId <= 0)
             throw new ArgumentOutOfRangeException(nameof(instanceId), "Journal instance ID must be positive.");
 
         RegionSettings settings = _getRegionSettings(region);
-        string cacheKey = $"{settings.StaticNamespace}:{instanceId}";
-        if (_tryGetJournalCache(cacheKey, out BlizzardJournalInstance? cached))
-            return cached;
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        JournalMetadataCacheEntry? cached = await journalMetadataCache.Get(
+            region,
+            settings.StaticNamespace,
+            instanceId);
+        if (cached != null && cached.ExpiresAt > now)
+        {
+            return new BlizzardJournalMetadata(
+                cached.Instance,
+                false,
+                cached.FetchedAt,
+                cached.ExpiresAt,
+                cached.StaleUntil);
+        }
 
         HttpClient client = _getClient(settings);
         BlizzardJournalInstance? response;
@@ -145,18 +155,30 @@ public class BlizzardApiHandler(
             Console.WriteLine($"Journal instance '{instanceId}' was not found in region '{region}'.");
             return null;
         }
+        catch (HttpRequestException exception) when (cached != null && cached.StaleUntil > now)
+        {
+            Console.WriteLine($"Using stale Journal metadata for instance '{instanceId}': {exception.Message}");
+            return new BlizzardJournalMetadata(
+                cached.Instance,
+                true,
+                cached.FetchedAt,
+                cached.ExpiresAt,
+                cached.StaleUntil);
+        }
 
         if (response != null)
         {
-            lock (_journalCacheLock)
-            {
-                _journalInstanceCache[cacheKey] = new JournalCacheEntry(
-                    response,
-                    DateTimeOffset.UtcNow.Add(_JOURNAL_CACHE_TTL));
-            }
+            DateTimeOffset fetchedAt = DateTimeOffset.UtcNow;
+            JournalMetadataCacheEntry entry = new(
+                response,
+                fetchedAt,
+                fetchedAt.Add(_JOURNAL_CACHE_TTL),
+                fetchedAt.Add(_JOURNAL_STALE_WINDOW));
+            await journalMetadataCache.Put(region, settings.StaticNamespace, instanceId, entry);
+            return new BlizzardJournalMetadata(response, false, entry.FetchedAt, entry.ExpiresAt, entry.StaleUntil);
         }
 
-        return response;
+        return null;
     }
 
     public async Task<int?> GetSeason(string region)
@@ -239,26 +261,6 @@ public class BlizzardApiHandler(
         return response ?? new BlizzardCharacterStatisticsResponse();
     }
 
-    private bool _tryGetJournalCache(string cacheKey, out BlizzardJournalInstance? instance)
-    {
-        lock (_journalCacheLock)
-        {
-            if (_journalInstanceCache.TryGetValue(cacheKey, out JournalCacheEntry? entry))
-            {
-                if (entry.ExpiresAt > DateTimeOffset.UtcNow)
-                {
-                    instance = entry.Instance;
-                    return true;
-                }
-
-                _journalInstanceCache.Remove(cacheKey);
-            }
-        }
-
-        instance = null;
-        return false;
-    }
-
     private RegionSettings _getRegionSettings(string region)
     {
         string normalizedRegion = region.Trim().ToLowerInvariant();
@@ -291,7 +293,4 @@ public class BlizzardApiHandler(
         return Convert.ToBase64String(plainTextBytes);
     }
 
-    private sealed record JournalCacheEntry(
-        BlizzardJournalInstance Instance,
-        DateTimeOffset ExpiresAt);
 }
