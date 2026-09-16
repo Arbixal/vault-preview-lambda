@@ -47,7 +47,7 @@ public sealed class InMemorySeasonConfigurationStore : ISeasonConfigurationStore
                 .LastOrDefault();
 
             if (scheduled != null)
-                _activate(scheduled.Id, now);
+                _activate(scheduled.Id, now, preserveScheduledActivation: true);
 
             return _revisions.Values
                 .Where(x => x.Status == SeasonRevisionStatus.Active)
@@ -60,11 +60,12 @@ public sealed class InMemorySeasonConfigurationStore : ISeasonConfigurationStore
     {
         ArgumentNullException.ThrowIfNull(revision);
         SeasonConfigurationValidator.ValidateOrThrow(revision.Configuration);
+        SeasonConfiguration snapshot = SeasonConfigurationSnapshot.Clone(revision.Configuration);
 
         if (string.IsNullOrWhiteSpace(revision.Id))
             throw new SeasonConfigurationValidationException(["Revision ID is required."]);
 
-        string expectedHash = SeasonRevisionHasher.Compute(revision.Configuration);
+        string expectedHash = SeasonRevisionHasher.Compute(snapshot);
         if (!string.Equals(expectedHash, revision.RevisionHash, StringComparison.Ordinal))
         {
             throw new SeasonConfigurationValidationException(
@@ -80,7 +81,7 @@ public sealed class InMemorySeasonConfigurationStore : ISeasonConfigurationStore
             if (_revisions.ContainsKey(revision.Id))
                 throw new InvalidOperationException($"Revision '{revision.Id}' already exists.");
 
-            _revisions.Add(revision.Id, revision);
+            _revisions.Add(revision.Id, revision with { Configuration = snapshot });
         }
     }
 
@@ -107,7 +108,7 @@ public sealed class InMemorySeasonConfigurationStore : ISeasonConfigurationStore
     {
         lock (_lock)
         {
-            _activate(revisionId, activatedAt ?? DateTimeOffset.UtcNow);
+            _activate(revisionId, activatedAt ?? DateTimeOffset.UtcNow, preserveScheduledActivation: false);
         }
     }
 
@@ -123,17 +124,24 @@ public sealed class InMemorySeasonConfigurationStore : ISeasonConfigurationStore
                     $"Only retired or active revision '{revisionId}' can be restored.");
             }
 
-            _activate(revisionId, activatedAt ?? DateTimeOffset.UtcNow);
+            _activate(revisionId, activatedAt ?? DateTimeOffset.UtcNow, preserveScheduledActivation: false);
         }
     }
 
-    private void _activate(string revisionId, DateTimeOffset activatedAt)
+    private void _activate(string revisionId, DateTimeOffset activatedAt, bool preserveScheduledActivation)
     {
         SeasonRevision revision = _getRevision(revisionId);
+        DateTimeOffset effectiveActivationAt = preserveScheduledActivation && revision.ActivationAt.HasValue
+            ? revision.ActivationAt.Value
+            : activatedAt;
 
         foreach ((string id, SeasonRevision existing) in _revisions.ToList())
         {
-            if (existing.Status == SeasonRevisionStatus.Active)
+            bool retireScheduled = existing.Status == SeasonRevisionStatus.Scheduled &&
+                                   (!preserveScheduledActivation ||
+                                    !existing.ActivationAt.HasValue ||
+                                    existing.ActivationAt.Value <= activatedAt);
+            if (existing.Status == SeasonRevisionStatus.Active || retireScheduled)
             {
                 _revisions[id] = existing with { Status = SeasonRevisionStatus.Retired };
             }
@@ -142,7 +150,7 @@ public sealed class InMemorySeasonConfigurationStore : ISeasonConfigurationStore
         _revisions[revisionId] = revision with
         {
             Status = SeasonRevisionStatus.Active,
-            ActivationAt = activatedAt
+            ActivationAt = effectiveActivationAt
         };
     }
 

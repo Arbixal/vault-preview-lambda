@@ -46,6 +46,11 @@ public static class SeasonConfigurationValidator
             x => x.Order.ToString(),
             "activity order",
             errors);
+        _validateUnique(
+            configuration.Activities.SelectMany(activity => activity.SourceIds ?? []),
+            x => x,
+            "source ID across activities",
+            errors);
 
         foreach (SeasonActivityDefinition activity in configuration.Activities)
         {
@@ -108,6 +113,10 @@ public static class SeasonConfigurationValidator
                     {
                         errors.Add(
                             $"{slotPrefix} reward rarity '{slot.Reward.Rarity}' is not supported.");
+                    }
+                    else if (slot.Reward.Rarity != slot.Reward.Rarity.ToLowerInvariant())
+                    {
+                        errors.Add($"{slotPrefix} reward rarity must use lowercase canonical casing.");
                     }
                 }
             }

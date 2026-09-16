@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -49,12 +50,33 @@ public sealed record SeasonRevision(
 {
     public static SeasonRevision Create(string id, SeasonConfiguration configuration)
     {
+        SeasonConfiguration snapshot = SeasonConfigurationSnapshot.Clone(configuration);
         return new(
             id,
-            configuration,
+            snapshot,
             SeasonRevisionStatus.Draft,
             null,
-            SeasonRevisionHasher.Compute(configuration));
+            SeasonRevisionHasher.Compute(snapshot));
+    }
+}
+
+public static class SeasonConfigurationSnapshot
+{
+    public static SeasonConfiguration Clone(SeasonConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        return configuration with
+        {
+            Activities = new ReadOnlyCollection<SeasonActivityDefinition>(
+                configuration.Activities
+                    .Select(activity => activity with
+                    {
+                        Slots = new ReadOnlyCollection<SeasonSlotDefinition>(activity.Slots.ToList()),
+                        SourceIds = new ReadOnlyCollection<string>(activity.SourceIds.ToList())
+                    })
+                    .ToList())
+        };
     }
 }
 

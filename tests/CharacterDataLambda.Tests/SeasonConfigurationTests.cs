@@ -44,6 +44,86 @@ public class SeasonConfigurationTests
     }
 
     [Fact]
+    public void Validate_RejectsMissingMetadataDuplicateOrderingAndCrossActivitySources()
+    {
+        SeasonConfiguration configuration = _createConfiguration() with
+        {
+            Id = string.Empty,
+            DisplayName = string.Empty,
+            Activities =
+            [
+                _createActivity("duplicate", "raid", 0) with
+                {
+                    SourceIds = ["shared-source"],
+                    Slots =
+                    [
+                        new SeasonSlotDefinition(
+                            "invalid-slot",
+                            "bosses",
+                            -1,
+                            "",
+                            -1,
+                            null!)
+                    ]
+                },
+                _createActivity("duplicate", "mythic-plus", 0) with
+                {
+                    SourceIds = ["shared-source"]
+                }
+            ]
+        };
+
+        IReadOnlyList<string> errors = SeasonConfigurationValidator.Validate(configuration);
+
+        Assert.Contains(errors, error => error.Contains("Season ID"));
+        Assert.Contains(errors, error => error.Contains("Season display name"));
+        Assert.Contains(errors, error => error.Contains("Duplicate activity ID"));
+        Assert.Contains(errors, error => error.Contains("Duplicate activity order"));
+        Assert.Contains(errors, error => error.Contains("source ID across activities"));
+        Assert.Contains(errors, error => error.Contains("required value must be greater"));
+        Assert.Contains(errors, error => error.Contains("display item count must be non-negative"));
+        Assert.Contains(errors, error => error.Contains("reward mapping is required"));
+    }
+
+    [Fact]
+    public void SaveDraft_RejectsHashMismatchAndNonCanonicalRarity()
+    {
+        SeasonConfiguration configuration = _createConfiguration() with
+        {
+            Activities =
+            [
+                _createActivity("raid", "raid", 0) with
+                {
+                    Slots =
+                    [
+                        new SeasonSlotDefinition(
+                            "raid-slot-2",
+                            "bosses",
+                            2,
+                            "2 bosses",
+                            2,
+                            new SeasonRewardDefinition(318, "EPIC"))
+                    ]
+                }
+            ]
+        };
+
+        IReadOnlyList<string> errors = SeasonConfigurationValidator.Validate(configuration);
+        Assert.Contains(errors, error => error.Contains("lowercase canonical casing"));
+
+        InMemorySeasonConfigurationStore store = new();
+        SeasonRevision revision = SeasonRevision.Create("midnight-s2-r1", _createConfiguration()) with
+        {
+            RevisionHash = "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        };
+
+        SeasonConfigurationValidationException exception = Assert.Throws<SeasonConfigurationValidationException>(
+            () => store.SaveDraft(revision));
+
+        Assert.Contains(exception.Errors, error => error.Contains("content hash"));
+    }
+
+    [Fact]
     public void ActivateAndRollback_RestoresPreviousRevision()
     {
         InMemorySeasonConfigurationStore store = new();
@@ -78,6 +158,74 @@ public class SeasonConfigurationTests
         Assert.Null(store.GetActive(activationAt.AddMinutes(-1)));
         Assert.Equal(revision.Id, store.GetActive(activationAt)?.Id);
         Assert.Equal(SeasonRevisionStatus.Active, store.GetRevision(revision.Id)?.Status);
+    }
+
+    [Fact]
+    public void ScheduledRevisions_ActivateInEffectiveOrderWithoutRegression()
+    {
+        InMemorySeasonConfigurationStore store = new();
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        SeasonRevision first = SeasonRevision.Create("midnight-s2-r1", _createConfiguration());
+        SeasonRevision second = SeasonRevision.Create(
+            "midnight-s2-r2",
+            _createConfiguration() with { ShortLabel = "Season 2 Revised" });
+        DateTimeOffset firstActivation = now.AddMinutes(1);
+        DateTimeOffset secondActivation = now.AddMinutes(2);
+
+        store.SaveDraft(first);
+        store.SaveDraft(second);
+        store.Schedule(first.Id, firstActivation);
+        store.Schedule(second.Id, secondActivation);
+
+        Assert.Equal(first.Id, store.GetActive(firstActivation.AddSeconds(1))?.Id);
+        Assert.Equal(second.Id, store.GetActive(secondActivation.AddSeconds(1))?.Id);
+        Assert.Equal(second.Id, store.GetActive(secondActivation.AddMinutes(1))?.Id);
+        Assert.Equal(secondActivation, store.GetRevision(second.Id)?.ActivationAt);
+        Assert.Equal(SeasonRevisionStatus.Retired, store.GetRevision(first.Id)?.Status);
+    }
+
+    [Fact]
+    public void SaveDraft_TakesAnImmutableConfigurationSnapshot()
+    {
+        List<SeasonSlotDefinition> slots =
+        [
+            new SeasonSlotDefinition(
+                "raid-slot-2",
+                "bosses",
+                2,
+                "2 bosses",
+                2,
+                new SeasonRewardDefinition(318, "epic"))
+        ];
+        List<SeasonActivityDefinition> activities =
+        [
+            new SeasonActivityDefinition(
+                "raid",
+                "raid",
+                "Raids",
+                "Vault slots",
+                0,
+                slots,
+                ["wow:journal-instance:1320"])
+        ];
+        SeasonConfiguration configuration = new(
+            "midnight-s2",
+            "Midnight Season 2",
+            "Season 2",
+            "Midnight",
+            18,
+            activities);
+        SeasonRevision revision = SeasonRevision.Create("midnight-s2-r1", configuration);
+        InMemorySeasonConfigurationStore store = new();
+
+        store.SaveDraft(revision);
+        slots.Clear();
+        activities.Clear();
+
+        SeasonRevision stored = Assert.IsType<SeasonRevision>(store.GetRevision(revision.Id));
+        Assert.Single(stored.Configuration.Activities);
+        Assert.Single(stored.Configuration.Activities[0].Slots);
+        Assert.Equal(revision.RevisionHash, stored.RevisionHash);
     }
 
     [Fact]
