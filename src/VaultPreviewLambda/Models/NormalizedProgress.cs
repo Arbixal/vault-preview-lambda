@@ -83,7 +83,7 @@ public sealed class ProgressItem
 
 public sealed class ProgressData
 {
-    [JsonPropertyName("value")] public double? Value { get; init; }
+    [JsonPropertyName("value")] public object? Value { get; init; }
     [JsonPropertyName("completed")] public int? Completed { get; init; }
     [JsonPropertyName("required")] public int? Required { get; init; }
     [JsonPropertyName("dimensions")] public IList<ProgressDimension> Dimensions { get; init; } = [];
@@ -94,7 +94,7 @@ public sealed class ProgressDimension
     [JsonPropertyName("id")] public string Id { get; init; } = string.Empty;
     [JsonPropertyName("label")] public string Label { get; init; } = string.Empty;
     [JsonPropertyName("state")] public string State { get; init; } = string.Empty;
-    [JsonPropertyName("value")] public double? Value { get; init; }
+    [JsonPropertyName("value")] public object? Value { get; init; }
     [JsonPropertyName("completed")] public bool? Completed { get; init; }
 }
 

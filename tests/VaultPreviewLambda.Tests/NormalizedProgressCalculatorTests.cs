@@ -29,7 +29,10 @@ public class NormalizedProgressCalculatorTests
                         "Vault slots",
                         0,
                         [new SeasonSlotDefinition("raid-slot-1", "bosses", 1, "1 boss", 1, new(318, "epic"))],
-                        ["wow:journal-instance:1320"]),
+                         ["wow:journal-instance:1320"])
+                     {
+                         ProgressRules = [new SeasonProgressRule("heroic-reward", "heroic", 1, 330, "epic")]
+                     },
                     new SeasonActivityDefinition(
                         "mythic-plus",
                         "mythic-plus",
@@ -37,7 +40,10 @@ public class NormalizedProgressCalculatorTests
                         "Weekly runs",
                         1,
                         [new SeasonSlotDefinition("mythic-plus-slot-1", "runs", 1, "1 run", 1, new(318, "epic"))],
-                        []),
+                         [])
+                     {
+                         ProgressRules = [new SeasonProgressRule("mythic-plus-8", null, 8, 325, "epic")]
+                     },
                     new SeasonActivityDefinition(
                         "delves",
                         "delves",
@@ -45,7 +51,10 @@ public class NormalizedProgressCalculatorTests
                         "Weekly completions",
                         2,
                         [new SeasonSlotDefinition("delves-slot-2", "delves", 2, "2 Delves", 1, new(318, "epic"))],
-                        []),
+                         [])
+                     {
+                         ProgressRules = [new SeasonProgressRule("delve-8", null, 8, 320, "epic")]
+                     },
                     new SeasonActivityDefinition(
                         "future",
                         "future-activity",
@@ -107,9 +116,12 @@ public class NormalizedProgressCalculatorTests
         Assert.Equal(4, response.Sections.Count);
         Assert.Equal("complete", response.Sections[0].Slots[0].Progress.State);
         Assert.Equal(318, response.Sections[0].Slots[0].Reward.ItemLevel);
+        Assert.Equal(330, response.Sections[0].Slots[0].Items[0].ItemLevel);
         Assert.Single(response.Sections[0].AdditionalItems);
         Assert.Equal("Higher Run +10", response.Sections[1].Slots[0].Items[0].Label);
+        Assert.Equal(325, response.Sections[1].Slots[0].Items[0].ItemLevel);
         Assert.Equal(2, response.Sections[2].Slots[0].Progress.Completed);
+        Assert.Equal(320, response.Sections[2].Slots[0].Items[0].ItemLevel);
         Assert.Equal("unsupported", response.Sections[3].Status);
     }
 
@@ -130,13 +142,16 @@ public class NormalizedProgressCalculatorTests
                     "Delves",
                     null,
                     0,
-                    [new SeasonSlotDefinition("delves-slot-2", "delves", 2, "2 Delves", 1, new(318, "epic"))],
-                    [])]));
+                     [new SeasonSlotDefinition("delves-slot-2", "delves", 2, "2 Delves", 1, new(318, "epic"))],
+                     [])
+                 {
+                     ProgressRules = [new SeasonProgressRule("delve-12", null, 12, 340, "epic")]
+                 }]));
         FakeDelveBaselineProvider baseline = new(new DelveBaseline(
             "different-season",
             "different-revision",
             "sha256:different",
-            new Dictionary<int, int> { [8] = 99 }));
+             new Dictionary<int, int> { [12] = 1 }));
 
         VaultProgressResponse response = await new VaultProgressCalculator().Calculate(
             "us",
@@ -148,11 +163,49 @@ public class NormalizedProgressCalculatorTests
             null,
             [],
             null,
-            new Dictionary<int, int> { [8] = 3 },
+             new Dictionary<int, int> { [12] = 3 },
             baseline);
 
         Assert.Equal("available", response.Sections[0].Status);
         Assert.Equal(0, response.Sections[0].Slots[0].Progress.Completed);
+    }
+
+    [Fact]
+    public async Task Calculate_MissingEligibleJournalMetadataIsUnavailable()
+    {
+        SeasonRevision revision = SeasonRevision.Create(
+            "midnight-s2-r1",
+            new SeasonConfiguration(
+                "midnight-s2",
+                "Midnight Season 2",
+                "Season 2",
+                "Midnight",
+                18,
+                [new SeasonActivityDefinition(
+                    "raid",
+                    "raid",
+                    "Raids",
+                    null,
+                    0,
+                    [new SeasonSlotDefinition("raid-slot-1", "bosses", 1, "1 boss", 1, new(318, "epic"))],
+                    ["wow:journal-instance:1320", "wow:journal-instance:1317"])]));
+        IReadOnlyList<BlizzardJournalMetadata> journal =
+        [
+            new BlizzardJournalMetadata(
+                new BlizzardJournalInstance { Id = 1320, Name = "The Venomous Abyss" },
+                false,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddDays(1),
+                DateTimeOffset.UtcNow.AddDays(7))
+        ];
+
+        VaultProgressResponse response = await new VaultProgressCalculator().Calculate(
+            "us", "nagrand", "bixposter", revision,
+            DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow,
+            null, journal, null, null, new FakeDelveBaselineProvider(null));
+
+        Assert.Equal("unavailable", response.Sections[0].Status);
+        Assert.Equal("stale", response.Sections[0].Freshness);
     }
 
     private static BlizzardEncounterResponse _createEncounterResponse(DateTimeOffset resetAt)

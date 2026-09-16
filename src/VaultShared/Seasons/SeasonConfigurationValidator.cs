@@ -73,6 +73,23 @@ public static class SeasonConfigurationValidator
                     _requireText(sourceId, $"{activityPrefix} source ID", errors);
             }
 
+            _validateUnique(activity.ProgressRules, x => x.Id, $"progress rule ID in activity '{activity.Id}'", errors);
+            foreach (SeasonProgressRule rule in activity.ProgressRules)
+            {
+                string rulePrefix = $"Progress rule '{activity.Id}/{rule.Id}'";
+                _requireText(rule.Id, $"{rulePrefix} ID", errors);
+                if (rule.MinimumValue <= 0)
+                    errors.Add($"{rulePrefix} minimum value must be greater than zero.");
+                if (rule.ItemLevel <= 0)
+                    errors.Add($"{rulePrefix} item level must be greater than zero.");
+
+                _requireText(rule.Rarity, $"{rulePrefix} rarity", errors);
+                if (!_supportedRarities.Contains(rule.Rarity))
+                    errors.Add($"{rulePrefix} rarity '{rule.Rarity}' is not supported.");
+                else if (rule.Rarity != rule.Rarity.ToLowerInvariant())
+                    errors.Add($"{rulePrefix} rarity must use lowercase canonical casing.");
+            }
+
             if (activity.Slots == null || activity.Slots.Count == 0)
             {
                 errors.Add($"{activityPrefix} must define at least one slot.");

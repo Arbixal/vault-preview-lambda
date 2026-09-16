@@ -101,6 +101,8 @@ public sealed class VaultProgressCalculator
             return _createUnavailableSection(activity, "No eligible Journal metadata is available.");
         }
 
+        bool missingMetadata = eligibleIds.Any(id => !metadataById.ContainsKey(id));
+
         List<ProgressItem> encounterItems = [];
         foreach (long instanceId in eligibleIds)
         {
@@ -116,17 +118,24 @@ public sealed class VaultProgressCalculator
                 bool? completed = dimensions.Count == 0
                     ? null
                     : dimensions.Any(x => x.Completed == true);
+                Reward? evidenceReward = _getDimensionReward(activity, dimensions);
 
                 encounterItems.Add(new ProgressItem
                 {
                     Id = $"wow:journal-encounter:{encounter.Id}",
                     Label = encounter.Name,
                     State = completed == null ? "unknown" : completed.Value ? "complete" : "incomplete",
+                    ItemLevel = evidenceReward?.ItemLevel,
+                    Rarity = evidenceReward?.Rarity,
                     Progress = new ProgressData { Dimensions = dimensions }
                 });
             }
         }
 
+        encounterItems = encounterItems
+            .OrderByDescending(_getItemQuality)
+            .ThenBy(item => item.Id, StringComparer.Ordinal)
+            .ToList();
         int maxDisplayItems = activity.Slots.Max(x => x.DisplayItemCount);
         IList<ProgressItem> additionalItems = encounterItems.Skip(maxDisplayItems).ToList();
         int completedCount = encounterItems.Count(x => x.State == "complete");
@@ -138,8 +147,8 @@ public sealed class VaultProgressCalculator
             Title = activity.Title,
             Subtitle = activity.Subtitle,
             Kind = activity.Kind,
-            Status = "available",
-            Freshness = stale ? "stale" : "fresh",
+            Status = missingMetadata ? "unavailable" : "available",
+            Freshness = missingMetadata || stale ? "stale" : "fresh",
             Slots = activity.Slots.Select(slot => _createSlot(
                 slot,
                 completedCount,
@@ -162,17 +171,23 @@ public sealed class VaultProgressCalculator
             .ThenBy(x => x.CompletedAt)
             .ThenBy(x => x.Dungeon, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        IList<ProgressItem> items = runs.Select((run, index) => new ProgressItem
+        IList<ProgressItem> items = runs.Select((run, index) =>
         {
-            Id = $"raiderio:run:{run.MapChallengeModeId}:{run.CompletedAt.Ticks}:{index}",
-            Label = $"{run.Dungeon} +{run.MythicLevel}",
-            State = "complete",
-            Progress = new ProgressData { Value = run.MythicLevel },
-            Tooltip = new Tooltip
+            Reward? evidenceReward = _getValueReward(activity, run.MythicLevel);
+            return new ProgressItem
             {
-                Title = run.Dungeon,
-                Rows = [new TooltipRow { Label = "Mythic level", Value = $"+{run.MythicLevel}" }]
-            }
+                Id = $"raiderio:run:{run.MapChallengeModeId}:{run.CompletedAt.Ticks}:{index}",
+                Label = $"{run.Dungeon} +{run.MythicLevel}",
+                State = "complete",
+                ItemLevel = evidenceReward?.ItemLevel,
+                Rarity = evidenceReward?.Rarity,
+                Progress = new ProgressData { Value = run.MythicLevel },
+                Tooltip = new Tooltip
+                {
+                    Title = run.Dungeon,
+                    Rows = [new TooltipRow { Label = "Mythic level", Value = $"+{run.MythicLevel}" }]
+                }
+            };
         }).ToList();
         int maxDisplayItems = activity.Slots.Max(x => x.DisplayItemCount);
 
@@ -209,7 +224,17 @@ public sealed class VaultProgressCalculator
                                baseline.SeasonId == revision.Configuration.Id &&
                                baseline.Revision == revision.Id &&
                                baseline.RevisionHash == revision.RevisionHash;
-        Dictionary<int, int> completedByLevel = Enumerable.Range(1, 11)
+        IEnumerable<int> configuredLevels = activity.ProgressRules
+            .Where(rule => string.IsNullOrWhiteSpace(rule.Dimension))
+            .Select(rule => rule.MinimumValue);
+        IEnumerable<int> baselineLevels = baseline?.Completed.Keys ?? [];
+        IEnumerable<int> levels = statistics.Keys
+            .Concat(baselineLevels)
+            .Concat(configuredLevels)
+            .Where(level => level > 0)
+            .Distinct()
+            .OrderBy(level => level);
+        Dictionary<int, int> completedByLevel = levels
             .ToDictionary(level => level, level => Math.Max(
                 0,
                 statistics.GetValueOrDefault(level) -
@@ -218,12 +243,18 @@ public sealed class VaultProgressCalculator
         IList<ProgressItem> items = completedByLevel
             .Where(x => x.Value > 0)
             .OrderByDescending(x => x.Key)
-            .Select(x => new ProgressItem
+            .Select(x =>
             {
-                Id = $"wow:delve-level:{x.Key}",
-                Label = $"Tier {x.Key}",
-                State = "complete",
-                Progress = new ProgressData { Value = x.Key, Completed = x.Value }
+                Reward? evidenceReward = _getValueReward(activity, x.Key);
+                return new ProgressItem
+                {
+                    Id = $"wow:delve-level:{x.Key}",
+                    Label = $"Tier {x.Key}",
+                    State = "complete",
+                    ItemLevel = evidenceReward?.ItemLevel,
+                    Rarity = evidenceReward?.Rarity,
+                    Progress = new ProgressData { Value = x.Key, Completed = x.Value }
+                };
             })
             .ToList();
         int maxDisplayItems = activity.Slots.Max(x => x.DisplayItemCount);
@@ -242,6 +273,37 @@ public sealed class VaultProgressCalculator
                 items.Take(slot.DisplayItemCount).ToList())).ToList(),
             AdditionalItems = items.Skip(maxDisplayItems).ToList()
         };
+    }
+
+    private static Reward? _getDimensionReward(
+        SeasonActivityDefinition activity,
+        IEnumerable<ProgressDimension> dimensions)
+    {
+        HashSet<string> completedDimensions = dimensions
+            .Where(x => x.Completed == true)
+            .Select(x => x.Id)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return activity.ProgressRules
+            .Where(rule => !string.IsNullOrWhiteSpace(rule.Dimension) &&
+                           completedDimensions.Contains(rule.Dimension))
+            .OrderByDescending(rule => rule.ItemLevel)
+            .Select(rule => new Reward { ItemLevel = rule.ItemLevel, Rarity = rule.Rarity })
+            .FirstOrDefault();
+    }
+
+    private static Reward? _getValueReward(SeasonActivityDefinition activity, int value)
+    {
+        return activity.ProgressRules
+            .Where(rule => string.IsNullOrWhiteSpace(rule.Dimension) && rule.MinimumValue <= value)
+            .OrderByDescending(rule => rule.MinimumValue)
+            .Select(rule => new Reward { ItemLevel = rule.ItemLevel, Rarity = rule.Rarity })
+            .FirstOrDefault();
+    }
+
+    private static int _getItemQuality(ProgressItem item)
+    {
+        return item.ItemLevel ?? (item.State == "complete" ? 1 : 0);
     }
 
     private static VaultSlot _createSlot(

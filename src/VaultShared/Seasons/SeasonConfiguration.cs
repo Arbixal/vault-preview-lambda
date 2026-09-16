@@ -21,7 +21,17 @@ public sealed record SeasonActivityDefinition(
     string? Subtitle,
     int Order,
     IReadOnlyList<SeasonSlotDefinition> Slots,
-    IReadOnlyList<string> SourceIds);
+    IReadOnlyList<string> SourceIds)
+{
+    public IReadOnlyList<SeasonProgressRule> ProgressRules { get; init; } = [];
+}
+
+public sealed record SeasonProgressRule(
+    string Id,
+    string? Dimension,
+    int MinimumValue,
+    int ItemLevel,
+    string Rarity);
 
 public sealed record SeasonSlotDefinition(
     string Id,
@@ -73,7 +83,8 @@ public static class SeasonConfigurationSnapshot
                     .Select(activity => activity with
                     {
                         Slots = new ReadOnlyCollection<SeasonSlotDefinition>(activity.Slots.ToList()),
-                        SourceIds = new ReadOnlyCollection<string>(activity.SourceIds.ToList())
+                        SourceIds = new ReadOnlyCollection<string>(activity.SourceIds.ToList()),
+                        ProgressRules = new ReadOnlyCollection<SeasonProgressRule>(activity.ProgressRules.ToList())
                     })
                     .ToList())
         };
