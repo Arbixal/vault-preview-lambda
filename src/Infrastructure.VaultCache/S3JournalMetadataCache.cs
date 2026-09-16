@@ -23,7 +23,12 @@ public sealed class S3JournalMetadataCache(IAmazonS3 s3Client) : IJournalMetadat
                 Key = _getKey(region, staticNamespace, instanceId)
             });
 
-            return await Deserialize(response.ResponseStream);
+            JournalMetadataCacheEntry? entry = await Deserialize(response.ResponseStream);
+            if (IsValid(entry))
+                return entry;
+
+            Console.WriteLine("Ignoring semantically invalid Journal metadata cache content.");
+            return null;
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
@@ -96,5 +101,14 @@ public sealed class S3JournalMetadataCache(IAmazonS3 s3Client) : IJournalMetadat
         {
             return null;
         }
+    }
+
+    internal static bool IsValid(JournalMetadataCacheEntry? entry)
+    {
+        return entry?.Instance != null &&
+               entry.Instance.Id > 0 &&
+               !string.IsNullOrWhiteSpace(entry.Instance.Name) &&
+               entry.FetchedAt <= entry.ExpiresAt &&
+               entry.ExpiresAt <= entry.StaleUntil;
     }
 }

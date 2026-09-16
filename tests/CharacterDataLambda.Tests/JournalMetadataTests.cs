@@ -171,6 +171,19 @@ public class JournalMetadataTests
     }
 
     [Fact]
+    public void S3CacheValidation_RejectsSemanticallyInvalidContent()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        JournalMetadataCacheEntry invalidEntry = new(
+            new BlizzardJournalInstance { Id = 0, Name = string.Empty },
+            now.AddHours(1),
+            now,
+            now.AddDays(1));
+
+        Assert.False(S3JournalMetadataCache.IsValid(invalidEntry));
+    }
+
+    [Fact]
     public async Task GetJournalInstance_ReturnsNullForMissingUpstreamInstance()
     {
         BlizzardApiHandler handler = new(
