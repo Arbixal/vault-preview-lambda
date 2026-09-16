@@ -210,6 +210,151 @@ public class NormalizedProgressCalculatorTests
         Assert.Equal("stale", response.Sections[0].Freshness);
     }
 
+    [Fact]
+    public async Task Calculate_UsesThresholdEvidenceBeyondDisplayedItems()
+    {
+        SeasonRevision revision = SeasonRevision.Create(
+            "midnight-s2-r1",
+            new SeasonConfiguration(
+                "midnight-s2",
+                "Midnight Season 2",
+                "Season 2",
+                "Midnight",
+                18,
+                [
+                    new SeasonActivityDefinition(
+                        "raid",
+                        "raid",
+                        "Raids",
+                        null,
+                        0,
+                        [new SeasonSlotDefinition("raid-slot-2", "bosses", 2, "2 bosses", 1, new(318, "epic"))],
+                        ["wow:journal-instance:1320"])
+                    {
+                        ProgressRules =
+                        [
+                            new SeasonProgressRule("heroic-reward", "heroic", 1, 330, "epic"),
+                            new SeasonProgressRule("mythic-reward", "mythic", 1, 340, "epic")
+                        ]
+                    },
+                    new SeasonActivityDefinition(
+                        "mythic-plus",
+                        "mythic-plus",
+                        "Mythic+",
+                        null,
+                        1,
+                        [new SeasonSlotDefinition("mythic-plus-slot-2", "runs", 2, "2 runs", 1, new(318, "epic"))],
+                        [])
+                    {
+                        ProgressRules =
+                        [
+                            new SeasonProgressRule("key-8", null, 8, 320, "epic"),
+                            new SeasonProgressRule("key-10", null, 10, 335, "epic")
+                        ]
+                    },
+                    new SeasonActivityDefinition(
+                        "delves",
+                        "delves",
+                        "Delves",
+                        null,
+                        2,
+                        [new SeasonSlotDefinition("delves-slot-2", "delves", 2, "2 Delves", 1, new(318, "epic"))],
+                        [])
+                    {
+                        ProgressRules =
+                        [
+                            new SeasonProgressRule("delve-8", null, 8, 320, "epic"),
+                            new SeasonProgressRule("delve-12", null, 12, 340, "epic")
+                        ]
+                    }
+                ]));
+        DateTimeOffset resetAt = DateTimeOffset.UtcNow.AddHours(-1);
+        BlizzardEncounterResponse encounters = new()
+        {
+            Expansions =
+            [
+                new BlizzardExpansion
+                {
+                    Instances =
+                    [
+                        new BlizzardInstance
+                        {
+                            Instance = new BlizzardBase { Id = 1320 },
+                            Modes =
+                            [
+                                new BlizzardMode
+                                {
+                                    Difficulty = new BlizzardType { Type = "heroic", Name = "Heroic" },
+                                    Progress = new BlizzardProgress
+                                    {
+                                        Encounters =
+                                        [
+                                            new BlizzardEncounter { Encounter = new BlizzardBase { Id = 2888 }, LastKillTimestamp = resetAt.ToUnixTimeMilliseconds() + 1 },
+                                            new BlizzardEncounter { Encounter = new BlizzardBase { Id = 2874 } }
+                                        ]
+                                    }
+                                },
+                                new BlizzardMode
+                                {
+                                    Difficulty = new BlizzardType { Type = "mythic", Name = "Mythic" },
+                                    Progress = new BlizzardProgress
+                                    {
+                                        Encounters =
+                                        [
+                                            new BlizzardEncounter { Encounter = new BlizzardBase { Id = 2888 } },
+                                            new BlizzardEncounter { Encounter = new BlizzardBase { Id = 2874 }, LastKillTimestamp = resetAt.ToUnixTimeMilliseconds() + 1 }
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        };
+        RaiderIoProfileResponse raiderIo = new()
+        {
+            WeeklyHighestLevelRuns =
+            [
+                new RaiderIoDungeonRun { Dungeon = "Higher Run", MythicLevel = 10 },
+                new RaiderIoDungeonRun { Dungeon = "Lower Run", MythicLevel = 8 }
+            ]
+        };
+
+        VaultProgressResponse response = await new VaultProgressCalculator().Calculate(
+            "us", "nagrand", "bixposter", revision, resetAt, DateTimeOffset.UtcNow,
+            encounters,
+            [new BlizzardJournalMetadata(
+                new BlizzardJournalInstance
+                {
+                    Id = 1320,
+                    Name = "The Venomous Abyss",
+                    Encounters =
+                    [
+                        new BlizzardJournalEncounter { Id = 2888, Name = "First" },
+                        new BlizzardJournalEncounter { Id = 2874, Name = "Second" }
+                    ]
+                },
+                false,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddDays(1),
+                DateTimeOffset.UtcNow.AddDays(7))],
+            raiderIo,
+            new Dictionary<int, int> { [12] = 1, [8] = 1 },
+            new FakeDelveBaselineProvider(new DelveBaseline(
+                revision.Configuration.Id,
+                revision.Id,
+                revision.RevisionHash,
+                new Dictionary<int, int>())));
+
+        Assert.Equal(340, response.Sections[0].Slots[0].Items[0].ItemLevel);
+        Assert.Equal(330, response.Sections[0].Slots[0].Reward.ItemLevel);
+        Assert.Equal(335, response.Sections[1].Slots[0].Items[0].ItemLevel);
+        Assert.Equal(320, response.Sections[1].Slots[0].Reward.ItemLevel);
+        Assert.Equal(340, response.Sections[2].Slots[0].Items[0].ItemLevel);
+        Assert.Equal(320, response.Sections[2].Slots[0].Reward.ItemLevel);
+    }
+
     private static BlizzardEncounterResponse _createEncounterResponse(DateTimeOffset resetAt)
     {
         return new BlizzardEncounterResponse

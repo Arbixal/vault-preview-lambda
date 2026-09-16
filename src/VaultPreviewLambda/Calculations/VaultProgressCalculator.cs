@@ -152,7 +152,8 @@ public sealed class VaultProgressCalculator
             Slots = activity.Slots.Select(slot => _createSlot(
                 slot,
                 completedCount,
-                encounterItems.Take(slot.DisplayItemCount).ToList())).ToList(),
+                encounterItems,
+                countBasedEvidence: false)).ToList(),
             AdditionalItems = additionalItems
         };
     }
@@ -202,7 +203,8 @@ public sealed class VaultProgressCalculator
             Slots = activity.Slots.Select(slot => _createSlot(
                 slot,
                 items.Count,
-                items.Take(slot.DisplayItemCount).ToList())).ToList(),
+                items,
+                countBasedEvidence: false)).ToList(),
             AdditionalItems = items.Skip(maxDisplayItems).ToList()
         };
     }
@@ -270,7 +272,8 @@ public sealed class VaultProgressCalculator
             Slots = activity.Slots.Select(slot => _createSlot(
                 slot,
                 totalCompleted,
-                items.Take(slot.DisplayItemCount).ToList())).ToList(),
+                items,
+                countBasedEvidence: true)).ToList(),
             AdditionalItems = items.Skip(maxDisplayItems).ToList()
         };
     }
@@ -309,11 +312,13 @@ public sealed class VaultProgressCalculator
     private static VaultSlot _createSlot(
         SeasonSlotDefinition definition,
         int completed,
-        IList<ProgressItem> items)
+        IEnumerable<ProgressItem> orderedEvidence,
+        bool countBasedEvidence)
     {
+        IList<ProgressItem> evidence = orderedEvidence.ToList();
         bool isComplete = completed >= definition.Required;
         ProgressItem? evidenceItem = isComplete
-            ? items.LastOrDefault(item => item.ItemLevel.HasValue && !string.IsNullOrEmpty(item.Rarity))
+            ? _getThresholdEvidence(definition.Required, evidence, countBasedEvidence)
             : null;
         Reward reward = evidenceItem != null
             ? new Reward { ItemLevel = evidenceItem.ItemLevel, Rarity = evidenceItem.Rarity }
@@ -337,8 +342,27 @@ public sealed class VaultProgressCalculator
                 State = isComplete ? "complete" : "incomplete"
             },
             Reward = reward,
-            Items = items
+            Items = evidence.Take(definition.DisplayItemCount).ToList()
         };
+    }
+
+    private static ProgressItem? _getThresholdEvidence(
+        int required,
+        IList<ProgressItem> orderedEvidence,
+        bool countBasedEvidence)
+    {
+        if (!countBasedEvidence)
+            return required <= orderedEvidence.Count ? orderedEvidence[required - 1] : null;
+
+        int completed = 0;
+        foreach (ProgressItem item in orderedEvidence)
+        {
+            completed += item.Progress?.Completed ?? 0;
+            if (completed >= required)
+                return item;
+        }
+
+        return null;
     }
 
     private static VaultSection _createUnsupportedSection(SeasonActivityDefinition activity)
