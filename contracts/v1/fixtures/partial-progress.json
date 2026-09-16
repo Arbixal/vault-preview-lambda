@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "character": {
+    "region": "eu",
+    "realm": "silvermoon",
+    "name": "partialcharacter",
+    "class": "mage"
+  },
+  "season": {
+    "id": "midnight-s2",
+    "displayName": "Midnight Season 2",
+    "shortLabel": "Season 2",
+    "expansion": "Midnight",
+    "sourceSeasonId": 18,
+    "revision": "midnight-s2-r1",
+    "revisionHash": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "progressPeriod": {
+    "resetAt": "2026-09-15T15:00:00Z",
+    "asOf": "2026-09-16T04:00:00Z"
+  },
+  "sections": [
+    {
+      "id": "raid",
+      "title": "Raids",
+      "kind": "raid",
+      "status": "available",
+      "freshness": "fresh",
+      "slots": [
+        {
+          "id": "raid-slot-2",
+          "requirement": { "unit": "bosses", "required": 2, "label": "2 bosses" },
+          "progress": { "completed": 1, "state": "incomplete" },
+          "reward": { "itemLevel": null, "rarity": null },
+          "items": [
+            {
+              "id": "wow:journal-encounter:2888",
+              "label": "N",
+              "state": "incomplete",
+              "progress": {
+                "dimensions": [
+                  { "id": "normal", "label": "Normal", "state": "complete", "completed": true },
+                  { "id": "heroic", "label": "Heroic", "state": "incomplete", "completed": false }
+                ]
+              },
+              "tooltip": {
+                "title": "Nek'zali the Soulcoiler",
+                "rows": [
+                  { "label": "Normal", "completed": true },
+                  { "label": "Heroic", "completed": false }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "raid-slot-4",
+          "requirement": { "unit": "bosses", "required": 4, "label": "4 bosses" },
+          "progress": { "completed": 1, "state": "incomplete" },
+          "reward": { "itemLevel": null, "rarity": null },
+          "items": []
+        }
+      ],
+      "additionalItems": []
+    },
+    {
+      "id": "mythic-plus",
+      "title": "Mythic+",
+      "kind": "mythic-plus",
+      "status": "available",
+      "freshness": "fresh",
+      "slots": [
+        {
+          "id": "mythic-plus-slot-4",
+          "requirement": { "unit": "runs", "required": 4, "label": "4 runs" },
+          "progress": { "completed": 2, "state": "incomplete" },
+          "reward": { "itemLevel": null, "rarity": null },
+          "items": [
+            {
+              "id": "raiderio:run:1",
+              "label": "The Dawnbreaker +7",
+              "state": "complete",
+              "progress": { "value": 7 }
+            },
+            {
+              "id": "raiderio:run:2",
+              "label": "Ara-Kara +6",
+              "state": "complete",
+              "progress": { "value": 6 }
+            }
+          ]
+        }
+      ],
+      "additionalItems": []
+    }
+  ]
+}

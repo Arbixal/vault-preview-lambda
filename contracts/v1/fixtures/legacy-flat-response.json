@@ -1,0 +1,24 @@
+{
+  "bixposter-nagrand": {
+    "player_class": "shaman",
+    "raid": {
+      "nek-zali-the-soulcoiler": {
+        "mythic": false,
+        "heroic": true,
+        "normal": false,
+        "lfr": false
+      }
+    },
+    "dungeons": [
+      {
+        "level": 8,
+        "name": "The Dawnbreaker"
+      }
+    ],
+    "delves": {
+      "1": 0,
+      "8": 2
+    },
+    "season": 18
+  }
+}
