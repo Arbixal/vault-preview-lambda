@@ -38,6 +38,12 @@ Run the solution tests with:
 dotnet test VaultPreviewLambda.sln --configuration Release
 ```
 
+## API Contract
+
+The canonical versioned API contract is `contracts/v1/openapi.yaml`. It defines the new `/v1/app-config` and `/v1/vault-progress/{region}/{realm}/{character}` endpoints, the deprecated legacy response boundary, structured errors, and the season/section/slot response model.
+
+The API repository owns this schema. Shared fixtures and automated schema validation are tracked separately in T02.
+
 ## Functions
 
 - `VaultPreviewLambda` exposes `GET /vault-progress/{region}/{realm}/{character}`.
