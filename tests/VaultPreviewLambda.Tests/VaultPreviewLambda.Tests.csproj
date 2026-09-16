@@ -15,8 +15,6 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/Infrastructure.Blizzard/Infrastructure.Blizzard.csproj" />
-    <ProjectReference Include="../../src/CharacterDataLambda/CharacterDataLambda.csproj" />
-    <ProjectReference Include="../../src/VaultShared/VaultShared.csproj" />
+    <ProjectReference Include="../../src/VaultPreviewLambda/VaultPreviewLambda.csproj" />
   </ItemGroup>
 </Project>
