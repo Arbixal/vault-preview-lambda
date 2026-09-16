@@ -7,6 +7,13 @@ public static class LegacyCharacterProgressAdapter
 {
     private const string _ENCOUNTER_ID_PREFIX = "wow:journal-encounter:";
     private const string _DELVE_ID_PREFIX = "wow:delve-level:";
+    private static readonly ISet<string> _legacyDifficulties = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "mythic",
+        "heroic",
+        "normal",
+        "lfr"
+    };
 
     public static IDictionary<string, CharacterProgress> Adapt(VaultProgressResponse response)
     {
@@ -60,6 +67,9 @@ public static class LegacyCharacterProgressAdapter
             foreach (ProgressDimension dimension in item.Progress?.Dimensions ?? [])
             {
                 string difficulty = dimension.Id.Trim().ToLowerInvariant();
+                if (!_legacyDifficulties.Contains(difficulty))
+                    continue;
+
                 bossProgress[difficulty] = dimension.Completed == true ||
                                            string.Equals(dimension.State, "complete", StringComparison.OrdinalIgnoreCase);
             }
