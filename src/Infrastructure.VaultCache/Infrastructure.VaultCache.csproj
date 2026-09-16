@@ -7,9 +7,12 @@
         <Nullable>enable</Nullable>
     </PropertyGroup>
     <ItemGroup>
-        <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.101.3" />
+      <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.101.3" />
         <PackageReference Include="AWSSDK.S3" Version="4.0.103.2" />
-        <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+      <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+    </ItemGroup>
+    <ItemGroup>
+      <ProjectReference Include="..\Infrastructure.Blizzard\Infrastructure.Blizzard.csproj" />
     </ItemGroup>
 
 </Project>

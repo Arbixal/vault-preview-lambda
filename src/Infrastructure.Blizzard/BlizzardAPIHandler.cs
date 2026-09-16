@@ -1,6 +1,7 @@
 ﻿using System.Net.Http.Json;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 using VaultPreview.Blizzard.Models;
 using VaultShared;
 using VaultShared.Models.Blizzard;
@@ -11,6 +12,10 @@ public interface IBlizzardApiHandler
 {
     Task Connect();
     Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character);
+    Task<BlizzardJournalMetadata?> GetJournalInstance(
+        string region,
+        long instanceId,
+        CancellationToken cancellationToken = default);
 
     Task<int?> GetSeason(string region);
 
@@ -19,7 +24,8 @@ public interface IBlizzardApiHandler
 
 public class BlizzardApiHandler(
     IHttpClientFactory clientFactory,
-    ISecretHandler secretHandler)
+    ISecretHandler secretHandler,
+    IJournalMetadataCache journalMetadataCache)
     : IBlizzardApiHandler
 {
     private const long _TIER1_DELVE = 40766;
@@ -33,23 +39,26 @@ public class BlizzardApiHandler(
     private const long _TIER9_DELVE = 40774;
     private const long _TIER10_DELVE = 40775;
     private const long _TIER11_DELVE = 40776;
-    
+    private static readonly TimeSpan _JOURNAL_CACHE_TTL = TimeSpan.FromHours(24);
+    private static readonly TimeSpan _JOURNAL_STALE_WINDOW = TimeSpan.FromDays(7);
+
     private string? _token;
 
     private sealed record RegionSettings(
         string BaseUrl,
         string ProfileNamespace,
         string DynamicNamespace,
+        string StaticNamespace,
         string Locale);
 
     private static readonly IReadOnlyDictionary<string, RegionSettings> _regionSettings =
         new Dictionary<string, RegionSettings>(StringComparer.OrdinalIgnoreCase)
     {
-        ["us"] = new("https://us.api.blizzard.com", "profile-us", "dynamic-us", "en_US"),
-        ["eu"] = new("https://eu.api.blizzard.com", "profile-eu", "dynamic-eu", "en_GB"),
-        ["kr"] = new("https://kr.api.blizzard.com", "profile-kr", "dynamic-kr", "ko_KR"),
-        ["tw"] = new("https://tw.api.blizzard.com", "profile-tw", "dynamic-tw", "zh_TW"),
-        ["cn"] = new("https://gateway.battlenet.com.cn", "profile-cn", "dynamic-cn", "zh_CN"),
+        ["us"] = new("https://us.api.blizzard.com", "profile-us", "dynamic-us", "static-us", "en_US"),
+        ["eu"] = new("https://eu.api.blizzard.com", "profile-eu", "dynamic-eu", "static-eu", "en_GB"),
+        ["kr"] = new("https://kr.api.blizzard.com", "profile-kr", "dynamic-kr", "static-kr", "ko_KR"),
+        ["tw"] = new("https://tw.api.blizzard.com", "profile-tw", "dynamic-tw", "static-tw", "zh_TW"),
+        ["cn"] = new("https://gateway.battlenet.com.cn", "profile-cn", "dynamic-cn", "static-cn", "zh_CN"),
     };
 
     private static readonly IReadOnlyDictionary<long, int> _delveTierByStatistic =
@@ -115,6 +124,91 @@ public class BlizzardApiHandler(
             $"/profile/wow/character/{_slug(realm)}/{_slug(character)}/encounters/raids?namespace={settings.ProfileNamespace}&locale={settings.Locale}");
 
         return response ?? new BlizzardEncounterResponse();
+    }
+
+    public async Task<BlizzardJournalMetadata?> GetJournalInstance(
+        string region,
+        long instanceId,
+        CancellationToken cancellationToken = default)
+    {
+        if (instanceId <= 0)
+            throw new ArgumentOutOfRangeException(nameof(instanceId), "Journal instance ID must be positive.");
+
+        RegionSettings settings = _getRegionSettings(region);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        JournalMetadataCacheEntry? cached = await journalMetadataCache.Get(
+            region,
+            settings.StaticNamespace,
+            instanceId);
+        if (cached != null && cached.ExpiresAt > now)
+        {
+            return new BlizzardJournalMetadata(
+                cached.Instance,
+                false,
+                cached.FetchedAt,
+                cached.ExpiresAt,
+                cached.StaleUntil);
+        }
+
+        HttpClient client = _getClient(settings);
+        BlizzardJournalInstance? response;
+        try
+        {
+            response = await client.GetFromJsonAsync<BlizzardJournalInstance>(
+                $"/data/wow/journal-instance/{instanceId}?namespace={settings.StaticNamespace}&locale={settings.Locale}",
+                cancellationToken);
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            Console.WriteLine($"Journal instance '{instanceId}' was not found in region '{region}'.");
+            return null;
+        }
+        catch (HttpRequestException exception) when (cached != null && cached.StaleUntil > now)
+        {
+            Console.WriteLine($"Using stale Journal metadata for instance '{instanceId}': {exception.Message}");
+            return new BlizzardJournalMetadata(
+                cached.Instance,
+                true,
+                cached.FetchedAt,
+                cached.ExpiresAt,
+                cached.StaleUntil);
+        }
+        catch (JsonException exception) when (cached != null && cached.StaleUntil > now)
+        {
+            Console.WriteLine($"Using stale Journal metadata after an invalid response for instance '{instanceId}': {exception.Message}");
+            return new BlizzardJournalMetadata(
+                cached.Instance,
+                true,
+                cached.FetchedAt,
+                cached.ExpiresAt,
+                cached.StaleUntil);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested &&
+                                                 cached != null &&
+                                                 cached.StaleUntil > now)
+        {
+            Console.WriteLine($"Using stale Journal metadata after a timeout for instance '{instanceId}'.");
+            return new BlizzardJournalMetadata(
+                cached.Instance,
+                true,
+                cached.FetchedAt,
+                cached.ExpiresAt,
+                cached.StaleUntil);
+        }
+
+        if (response != null)
+        {
+            DateTimeOffset fetchedAt = DateTimeOffset.UtcNow;
+            JournalMetadataCacheEntry entry = new(
+                response,
+                fetchedAt,
+                fetchedAt.Add(_JOURNAL_CACHE_TTL),
+                fetchedAt.Add(_JOURNAL_STALE_WINDOW));
+            await journalMetadataCache.Put(region, settings.StaticNamespace, instanceId, entry);
+            return new BlizzardJournalMetadata(response, false, entry.FetchedAt, entry.ExpiresAt, entry.StaleUntil);
+        }
+
+        return null;
     }
 
     public async Task<int?> GetSeason(string region)
@@ -228,4 +322,5 @@ public class BlizzardApiHandler(
         byte[] plainTextBytes = Encoding.UTF8.GetBytes(plainText);
         return Convert.ToBase64String(plainTextBytes);
     }
+
 }

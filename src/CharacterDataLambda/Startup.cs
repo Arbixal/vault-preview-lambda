@@ -12,6 +12,7 @@ public class Startup
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddSingleton<IBlizzardApiHandler, BlizzardApiHandler>();
+        services.AddSingleton<BlizzardJournalMetadataProvider>();
         services.AddSingleton<ISecretHandler, SecretHandler>();
         services.AddSingleton<IVaultCacheHandler, VaultCacheHandler>();
         services.AddVaultCache();

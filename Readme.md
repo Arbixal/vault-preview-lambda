@@ -50,6 +50,8 @@ The API repository owns this schema. Shared fixtures and automated schema valida
 - `CharacterDataLambda` refreshes cached delve statistics on the scheduled Tuesday trigger.
 - `BlizzardTokenHandler` refreshes the Blizzard OAuth token stored in AWS Systems Manager Parameter Store.
 
+The API stores Blizzard Journal metadata in the existing `vault-preview-data` S3 bucket under `journal-metadata/v1/`. Entries are fresh for 24 hours and may be served as stale last-known-good metadata for up to seven days when Blizzard is unavailable.
+
 The functions expect these SSM parameters in the deployment region:
 
 - `/Blizzard/ClientId`
