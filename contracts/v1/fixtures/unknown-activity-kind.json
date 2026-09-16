@@ -24,19 +24,20 @@
       "id": "account-wide-activity",
       "title": "Account-wide Activity",
       "kind": "future-account-activity",
-      "status": "available",
-      "freshness": "fresh",
+      "status": "future-status",
+      "freshness": "future-freshness",
       "slots": [
         {
           "id": "account-wide-activity-slot-3",
           "requirement": { "unit": "events", "required": 3, "label": "3 events" },
           "progress": { "completed": 1, "state": "incomplete" },
-          "reward": { "itemLevel": null, "rarity": null },
+          "reward": { "itemLevel": null, "rarity": "future-rarity" },
           "items": [
             {
               "id": "wow:future-activity:1",
               "label": "Future event",
-              "state": "complete",
+              "state": "future-item-state",
+              "rarity": "future-rarity",
               "progress": { "value": 1 }
             }
           ]

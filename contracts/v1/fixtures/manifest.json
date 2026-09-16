@@ -3,6 +3,12 @@
   "contract": "v1",
   "fixtures": [
     {
+      "name": "app-config",
+      "path": "app-config.json",
+      "responseType": "AppConfigResponse",
+      "purpose": "Runtime active-season configuration response."
+    },
+    {
       "name": "current-season",
       "path": "current-season.json",
       "responseType": "CharacterProgressResponse",
@@ -45,10 +51,16 @@
       "purpose": "Synthetic future season with different slot requirements and an additional activity."
     },
     {
-      "name": "legacy-flat-response",
+      "name": "legacy-flat-response-minimal",
       "path": "legacy-flat-response.json",
       "responseType": "LegacyProgressResponse",
-      "purpose": "Golden compatibility fixture for the existing unversioned response."
+      "purpose": "Minimal compatibility fixture for the existing unversioned response shape."
+    },
+    {
+      "name": "legacy-flat-response-full",
+      "path": "legacy-flat-response-full.json",
+      "responseType": "LegacyProgressResponse",
+      "purpose": "Full golden compatibility fixture covering all Delve levels, multiple raids, and a complete weekly run set."
     }
   ]
 }

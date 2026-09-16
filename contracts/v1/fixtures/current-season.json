@@ -19,6 +19,9 @@
     "resetAt": "2026-09-15T15:00:00Z",
     "asOf": "2026-09-16T03:00:00Z"
   },
+  "futureOptionalMetadata": {
+    "source": "fixture-only-forward-compatibility-check"
+  },
   "sections": [
     {
       "id": "raid",

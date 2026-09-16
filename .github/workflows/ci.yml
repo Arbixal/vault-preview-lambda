@@ -25,8 +25,19 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: contracts/v1/fixtures/package-lock.json
+
       - name: Restore dependencies
         run: dotnet restore VaultPreviewLambda.sln
+
+      - name: Validate contract fixtures
+        working-directory: contracts/v1/fixtures
+        run: npm ci && npm run validate
 
       - name: Build
         run: dotnet build VaultPreviewLambda.sln --configuration Release --no-restore
