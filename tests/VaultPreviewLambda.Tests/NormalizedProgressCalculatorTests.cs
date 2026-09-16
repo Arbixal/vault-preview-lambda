@@ -355,6 +355,46 @@ public class NormalizedProgressCalculatorTests
         Assert.Equal(320, response.Sections[2].Slots[0].Reward.ItemLevel);
     }
 
+    [Fact]
+    public async Task Calculate_UsesFallbackWhenThresholdEvidenceHasNoRewardRule()
+    {
+        SeasonRevision revision = SeasonRevision.Create(
+            "midnight-s2-r1",
+            new SeasonConfiguration(
+                "midnight-s2",
+                "Midnight Season 2",
+                "Season 2",
+                "Midnight",
+                18,
+                [new SeasonActivityDefinition(
+                    "mythic-plus",
+                    "mythic-plus",
+                    "Mythic+",
+                    null,
+                    0,
+                    [new SeasonSlotDefinition("mythic-plus-slot-1", "runs", 1, "1 run", 1, new(318, "epic"))],
+                    [])
+                {
+                    ProgressRules = [new SeasonProgressRule("key-10", null, 10, 335, "epic")]
+                }]));
+
+        VaultProgressResponse response = await new VaultProgressCalculator().Calculate(
+            "us", "nagrand", "bixposter", revision,
+            DateTimeOffset.UtcNow.AddHours(-1), DateTimeOffset.UtcNow,
+            null,
+            [],
+            new RaiderIoProfileResponse
+            {
+                WeeklyHighestLevelRuns = [new RaiderIoDungeonRun { Dungeon = "Lower Run", MythicLevel = 8 }]
+            },
+            null,
+            new FakeDelveBaselineProvider(null));
+
+        Assert.Null(response.Sections[0].Slots[0].Items[0].ItemLevel);
+        Assert.Equal(318, response.Sections[0].Slots[0].Reward.ItemLevel);
+        Assert.Equal("epic", response.Sections[0].Slots[0].Reward.Rarity);
+    }
+
     private static BlizzardEncounterResponse _createEncounterResponse(DateTimeOffset resetAt)
     {
         return new BlizzardEncounterResponse

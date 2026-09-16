@@ -320,9 +320,10 @@ public sealed class VaultProgressCalculator
         ProgressItem? evidenceItem = isComplete
             ? _getThresholdEvidence(definition.Required, evidence, countBasedEvidence)
             : null;
-        Reward reward = evidenceItem != null
+        Reward? evidenceReward = evidenceItem is { ItemLevel: not null, Rarity: not null }
             ? new Reward { ItemLevel = evidenceItem.ItemLevel, Rarity = evidenceItem.Rarity }
-            : new Reward
+            : null;
+        Reward reward = evidenceReward ?? new Reward
             {
                 ItemLevel = isComplete ? definition.FallbackReward.ItemLevel : null,
                 Rarity = isComplete ? definition.FallbackReward.Rarity : null
