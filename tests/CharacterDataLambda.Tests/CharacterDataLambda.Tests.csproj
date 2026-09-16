@@ -16,5 +16,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/CharacterDataLambda/CharacterDataLambda.csproj" />
+    <ProjectReference Include="../../src/VaultShared/VaultShared.csproj" />
   </ItemGroup>
 </Project>
