@@ -17,4 +17,9 @@
   <ItemGroup>
     <ProjectReference Include="../../src/VaultShared/VaultShared.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../season-config/definitions/future-season/future-season-r1.json"
+          Link="Fixtures/future-season-r1.json"
+          CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
