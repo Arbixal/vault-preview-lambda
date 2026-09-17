@@ -1,7 +1,7 @@
 namespace VaultShared.Seasons;
 
-public sealed record DelveBaseline(
+public sealed record ActiveSeasonRevision(
     string SeasonId,
     string Revision,
     string RevisionHash,
-    IReadOnlyDictionary<int, int> Completed);
+    int? SourceSeasonId);
