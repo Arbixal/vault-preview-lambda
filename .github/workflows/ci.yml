@@ -39,6 +39,9 @@ jobs:
         working-directory: contracts/v1/fixtures
         run: npm ci && npm run validate
 
+      - name: Validate SAM templates
+        run: node -e "const fs=require('fs'); for (const path of ['src/VaultPreviewLambda/serverless.template','src/CharacterDataLambda/serverless.template','src/SeasonActivationLambda/serverless.template']) JSON.parse(fs.readFileSync(path,'utf8'));"
+
       - name: Build
         run: dotnet build VaultPreviewLambda.sln --configuration Release --no-restore
 
