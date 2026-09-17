@@ -69,6 +69,8 @@ The functions expect these SSM parameters in the deployment region:
 
 The versioned endpoints allow the development and production Vault Preview origins by default (`http://localhost:3000` and `https://vault-preview.bixnpieces.com`). Set `VAULT_PREVIEW_CORS_ORIGINS` to a comma-separated allowlist when a deployment needs different origins.
 
+The committed season source format and configuration delivery boundary are documented in `season-config/README.md`. Source definitions live under `season-config/definitions/{seasonId}/{revisionId}.json`; the future CLI and GitHub Actions workflow will publish them as immutable S3 revisions and route activation through the dedicated activation Lambda.
+
 The API and scheduled-function SAM templates create Lambda execution roles with access limited to the `/Blizzard/*` parameter path and the cache bucket. The token function is deployed directly and therefore needs a separately created execution role.
 
 ## AWS Setup

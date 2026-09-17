@@ -1,0 +1,31 @@
+{
+  "id": "future-season",
+  "displayName": "Future Season",
+  "shortLabel": "Future",
+  "expansion": "Future Expansion",
+  "sourceSeasonId": null,
+  "activities": [
+    {
+      "id": "future-activity",
+      "kind": "future-kind",
+      "title": "Future Activity",
+      "subtitle": "Configured activity",
+      "order": 0,
+      "slots": [
+        {
+          "id": "future-slot",
+          "unit": "activities",
+          "required": 3,
+          "label": "3 activities",
+          "displayItemCount": 1,
+          "fallbackReward": {
+            "itemLevel": 500,
+            "rarity": "epic"
+          }
+        }
+      ],
+      "sourceIds": [],
+      "progressRules": []
+    }
+  ]
+}

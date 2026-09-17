@@ -1,0 +1,230 @@
+{
+  "id": "midnight-s1",
+  "displayName": "Midnight Season 1",
+  "shortLabel": "Season 1",
+  "expansion": "Midnight",
+  "sourceSeasonId": 17,
+  "activities": [
+    {
+      "id": "raid",
+      "kind": "raid",
+      "title": "Raids",
+      "subtitle": "Vault slots",
+      "order": 0,
+      "slots": [
+        {
+          "id": "raid-slot-2",
+          "unit": "bosses",
+          "required": 2,
+          "label": "2 bosses",
+          "displayItemCount": 2,
+          "fallbackReward": {
+            "itemLevel": 285,
+            "rarity": "rare"
+          }
+        },
+        {
+          "id": "raid-slot-4",
+          "unit": "bosses",
+          "required": 4,
+          "label": "4 bosses",
+          "displayItemCount": 4,
+          "fallbackReward": {
+            "itemLevel": 298,
+            "rarity": "epic"
+          }
+        },
+        {
+          "id": "raid-slot-6",
+          "unit": "bosses",
+          "required": 6,
+          "label": "6 bosses",
+          "displayItemCount": 6,
+          "fallbackReward": {
+            "itemLevel": 311,
+            "rarity": "legendary"
+          }
+        }
+      ],
+      "sourceIds": [
+        "wow:journal-instance:1320"
+      ],
+      "progressRules": [
+        {
+          "id": "raid-lfr",
+          "dimension": "lfr",
+          "minimumValue": 1,
+          "itemLevel": 272,
+          "rarity": "uncommon"
+        },
+        {
+          "id": "raid-normal",
+          "dimension": "normal",
+          "minimumValue": 1,
+          "itemLevel": 285,
+          "rarity": "rare"
+        },
+        {
+          "id": "raid-heroic",
+          "dimension": "heroic",
+          "minimumValue": 1,
+          "itemLevel": 298,
+          "rarity": "epic"
+        },
+        {
+          "id": "raid-mythic",
+          "dimension": "mythic",
+          "minimumValue": 1,
+          "itemLevel": 311,
+          "rarity": "legendary"
+        }
+      ]
+    },
+    {
+      "id": "mythic-plus",
+      "kind": "mythic-plus",
+      "title": "Mythic+",
+      "subtitle": "Weekly runs",
+      "order": 1,
+      "slots": [
+        {
+          "id": "mythic-plus-slot-1",
+          "unit": "runs",
+          "required": 1,
+          "label": "1 run",
+          "displayItemCount": 1,
+          "fallbackReward": {
+            "itemLevel": 285,
+            "rarity": "rare"
+          }
+        },
+        {
+          "id": "mythic-plus-slot-4",
+          "unit": "runs",
+          "required": 4,
+          "label": "4 runs",
+          "displayItemCount": 4,
+          "fallbackReward": {
+            "itemLevel": 292,
+            "rarity": "epic"
+          }
+        },
+        {
+          "id": "mythic-plus-slot-8",
+          "unit": "runs",
+          "required": 8,
+          "label": "8 runs",
+          "displayItemCount": 8,
+          "fallbackReward": {
+            "itemLevel": 299,
+            "rarity": "legendary"
+          }
+        }
+      ],
+      "sourceIds": [],
+      "progressRules": [
+        {
+          "id": "mythic-plus-2",
+          "dimension": null,
+          "minimumValue": 2,
+          "itemLevel": 285,
+          "rarity": "rare"
+        },
+        {
+          "id": "mythic-plus-4",
+          "dimension": null,
+          "minimumValue": 4,
+          "itemLevel": 289,
+          "rarity": "rare"
+        },
+        {
+          "id": "mythic-plus-6",
+          "dimension": null,
+          "minimumValue": 6,
+          "itemLevel": 292,
+          "rarity": "epic"
+        },
+        {
+          "id": "mythic-plus-8",
+          "dimension": null,
+          "minimumValue": 8,
+          "itemLevel": 296,
+          "rarity": "epic"
+        },
+        {
+          "id": "mythic-plus-10",
+          "dimension": null,
+          "minimumValue": 10,
+          "itemLevel": 299,
+          "rarity": "legendary"
+        }
+      ]
+    },
+    {
+      "id": "delves",
+      "kind": "delves",
+      "title": "Delves",
+      "subtitle": "Weekly completions",
+      "order": 2,
+      "slots": [
+        {
+          "id": "delves-slot-2",
+          "unit": "delves",
+          "required": 2,
+          "label": "2 Delves",
+          "displayItemCount": 2,
+          "fallbackReward": {
+            "itemLevel": 278,
+            "rarity": "uncommon"
+          }
+        },
+        {
+          "id": "delves-slot-4",
+          "unit": "delves",
+          "required": 4,
+          "label": "4 Delves",
+          "displayItemCount": 4,
+          "fallbackReward": {
+            "itemLevel": 285,
+            "rarity": "rare"
+          }
+        },
+        {
+          "id": "delves-slot-8",
+          "unit": "delves",
+          "required": 8,
+          "label": "8 Delves",
+          "displayItemCount": 8,
+          "fallbackReward": {
+            "itemLevel": 298,
+            "rarity": "epic"
+          }
+        }
+      ],
+      "sourceIds": [],
+      "progressRules": [
+        {
+          "id": "delve-tier-1",
+          "dimension": null,
+          "minimumValue": 1,
+          "itemLevel": 272,
+          "rarity": "uncommon"
+        },
+        {
+          "id": "delve-tier-4",
+          "dimension": null,
+          "minimumValue": 4,
+          "itemLevel": 282,
+          "rarity": "rare"
+        },
+        {
+          "id": "delve-tier-8",
+          "dimension": null,
+          "minimumValue": 8,
+          "itemLevel": 298,
+          "rarity": "epic"
+        }
+      ]
+    }
+  ]
+}
