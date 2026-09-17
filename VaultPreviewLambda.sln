@@ -21,6 +21,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CharacterDataLambda", "src\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.VaultCache", "src\Infrastructure.VaultCache\Infrastructure.VaultCache.csproj", "{D220A43A-EFAD-41B9-A5AF-D4AC7B3AD98A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.SeasonConfiguration", "src\Infrastructure.SeasonConfiguration\Infrastructure.SeasonConfiguration.csproj", "{0F4574F4-1818-48A7-83E4-15CEF3CA218F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SeasonActivationLambda", "src\SeasonActivationLambda\SeasonActivationLambda.csproj", "{2E1D55B1-2B0E-4B8A-8E55-1A6A4CB3B9D8}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CharacterDataLambda.Tests", "tests\CharacterDataLambda.Tests\CharacterDataLambda.Tests.csproj", "{5C79F802-88D2-4D24-9372-0D73FE3B7D87}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VaultShared.Tests", "tests\VaultShared.Tests\VaultShared.Tests.csproj", "{D684BF9F-EB1A-40C6-8D8F-AD2C260BE2FF}"
@@ -28,6 +32,11 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.Blizzard.Tests", "tests\Infrastructure.Blizzard.Tests\Infrastructure.Blizzard.Tests.csproj", "{08FE9E7C-D833-4131-BAE1-340F6463511F}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.VaultCache.Tests", "tests\Infrastructure.VaultCache.Tests\Infrastructure.VaultCache.Tests.csproj", "{4CCA8E2D-6CFB-4A59-9931-0B38CE8E2E56}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.SeasonConfiguration.Tests", "tests\Infrastructure.SeasonConfiguration.Tests\Infrastructure.SeasonConfiguration.Tests.csproj", "{565B82DC-E924-47EB-9AD7-C8012C5075D0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SeasonActivationLambda.Tests", "tests\SeasonActivationLambda.Tests\SeasonActivationLambda.Tests.csproj", "{3D7A1B6E-7B2D-4A02-9E88-5D9F0A4B6C21}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VaultPreviewLambda.Tests", "tests\VaultPreviewLambda.Tests\VaultPreviewLambda.Tests.csproj", "{E1923EC3-C347-4A4E-9811-B4B97C3F18C8}"
 EndProject
 Global
@@ -64,6 +73,14 @@ Global
 		{D220A43A-EFAD-41B9-A5AF-D4AC7B3AD98A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D220A43A-EFAD-41B9-A5AF-D4AC7B3AD98A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D220A43A-EFAD-41B9-A5AF-D4AC7B3AD98A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0F4574F4-1818-48A7-83E4-15CEF3CA218F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0F4574F4-1818-48A7-83E4-15CEF3CA218F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0F4574F4-1818-48A7-83E4-15CEF3CA218F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0F4574F4-1818-48A7-83E4-15CEF3CA218F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2E1D55B1-2B0E-4B8A-8E55-1A6A4CB3B9D8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2E1D55B1-2B0E-4B8A-8E55-1A6A4CB3B9D8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2E1D55B1-2B0E-4B8A-8E55-1A6A4CB3B9D8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2E1D55B1-2B0E-4B8A-8E55-1A6A4CB3B9D8}.Release|Any CPU.Build.0 = Release|Any CPU
 		{5C79F802-88D2-4D24-9372-0D73FE3B7D87}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{5C79F802-88D2-4D24-9372-0D73FE3B7D87}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5C79F802-88D2-4D24-9372-0D73FE3B7D87}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -80,6 +97,14 @@ Global
 		{4CCA8E2D-6CFB-4A59-9931-0B38CE8E2E56}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4CCA8E2D-6CFB-4A59-9931-0B38CE8E2E56}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4CCA8E2D-6CFB-4A59-9931-0B38CE8E2E56}.Release|Any CPU.Build.0 = Release|Any CPU
+		{565B82DC-E924-47EB-9AD7-C8012C5075D0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{565B82DC-E924-47EB-9AD7-C8012C5075D0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{565B82DC-E924-47EB-9AD7-C8012C5075D0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{565B82DC-E924-47EB-9AD7-C8012C5075D0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3D7A1B6E-7B2D-4A02-9E88-5D9F0A4B6C21}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3D7A1B6E-7B2D-4A02-9E88-5D9F0A4B6C21}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3D7A1B6E-7B2D-4A02-9E88-5D9F0A4B6C21}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3D7A1B6E-7B2D-4A02-9E88-5D9F0A4B6C21}.Release|Any CPU.Build.0 = Release|Any CPU
 		{E1923EC3-C347-4A4E-9811-B4B97C3F18C8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{E1923EC3-C347-4A4E-9811-B4B97C3F18C8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E1923EC3-C347-4A4E-9811-B4B97C3F18C8}.Release|Any CPU.ActiveCfg = Release|Any CPU

@@ -4,12 +4,12 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using VaultShared.Seasons;
 
-namespace VaultPreview.VaultCache;
+namespace VaultPreview.SeasonConfigurationInfrastructure;
 
 public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
     : ISeasonRevisionStore, IActiveSeasonRevisionProvider
 {
-    private const string _BUCKET_NAME = "vault-preview-data";
+    private const string _DEFAULT_BUCKET_NAME = "vault-preview-data";
     private const string _ACTIVE_KEY = "season-config/v1/active.json";
     private const string _SCHEDULED_KEY = "season-config/v1/scheduled.json";
     private const string _REVISION_KEY_FORMAT = "season-config/v1/revisions/{0}/{1}.json";
@@ -50,6 +50,32 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
             snapshot,
             SeasonRevisionStatus.Active,
             pointer.ActivationAt,
+            document.RevisionHash);
+    }
+
+    public async Task<SeasonRevision?> GetRevision(
+        string seasonId,
+        string revisionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_hasSafeKeyPart(seasonId) || !_hasSafeKeyPart(revisionId))
+            return null;
+
+        SeasonRevisionDocument? document = await _getDocument<SeasonRevisionDocument>(
+            GetRevisionKey(seasonId, revisionId),
+            cancellationToken);
+        if (!IsValid(document) ||
+            !string.Equals(document!.Id, revisionId, StringComparison.Ordinal) ||
+            !string.Equals(document.Configuration.Id, seasonId, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return new SeasonRevision(
+            document.Id,
+            SeasonConfigurationSnapshot.Clone(document.Configuration),
+            SeasonRevisionStatus.Draft,
+            null,
             document.RevisionHash);
     }
 
@@ -259,7 +285,7 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
             using GetObjectResponse response = await s3Client.GetObjectAsync(
                 new GetObjectRequest
                 {
-                    BucketName = _BUCKET_NAME,
+                    BucketName = _getBucketName(),
                     Key = key
                 },
                 cancellationToken);
@@ -305,7 +331,7 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
         await s3Client.PutObjectAsync(
             new PutObjectRequest
             {
-                BucketName = _BUCKET_NAME,
+                BucketName = _getBucketName(),
                 Key = key,
                 ContentType = "application/json",
                 InputStream = memoryStream,
@@ -323,7 +349,7 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
             await s3Client.DeleteObjectAsync(
                 new DeleteObjectRequest
                 {
-                    BucketName = _BUCKET_NAME,
+                    BucketName = _getBucketName(),
                     Key = key
                 },
                 cancellationToken);
@@ -344,4 +370,7 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
     private static bool _hasSafeKeyPart(string value) =>
         !string.IsNullOrWhiteSpace(value) &&
         value.IndexOfAny(['/','\\']) < 0;
+
+    private static string _getBucketName() =>
+        Environment.GetEnvironmentVariable("VAULT_PREVIEW_DATA_BUCKET") ?? _DEFAULT_BUCKET_NAME;
 }

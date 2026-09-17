@@ -1,4 +1,4 @@
-namespace VaultPreview.VaultCache;
+namespace VaultPreview.SeasonConfigurationInfrastructure;
 
 public sealed class ActiveSeasonPointer
 {
