@@ -60,6 +60,66 @@ The file contains only a serialized `SeasonConfiguration` object. It must not co
 
 The shared `SeasonConfigurationValidator` remains the canonical validator. It checks required metadata, activity and slot uniqueness, ordering, source IDs, thresholds, reward mappings, evidence rules, and lowercase supported rarities.
 
+## Standard Activity Kinds
+
+The source format deliberately keeps `kind` open-ended, but most normal seasons use these three API-supported evidence-driven kinds:
+
+| Kind | Evidence source | Standard progress model | Typical slot requirements |
+| --- | --- | --- | --- |
+| `raid` | Blizzard Journal metadata selected by `sourceIds`, combined with character raid encounters | One progress item per Journal encounter with nested difficulty dimensions such as `lfr`, `normal`, `heroic`, and `mythic` | 2, 4, and 6 bosses |
+| `mythic-plus` | Raider.IO weekly highest-level runs | One progress item per selected weekly run with a numeric Mythic+ value | 1, 4, and 8 runs |
+| `delves` | Blizzard character statistics plus the season-aware S3 baseline | Count-based progress items keyed by configured Delve tier | 2, 4, and 8 Delves |
+
+The API owns the rules behind these kinds. The source definition supplies the activity title, ordering, slots, source IDs, and reward rules; the calculation layer supplies the upstream evidence and returns the normalized sections and slots.
+
+### Raid Definitions
+
+Raid activities normally contain:
+
+- `sourceIds` using values such as `wow:journal-instance:1320` in the intended display order.
+- Three slots with `unit: "bosses"` and requirements such as 2, 4, and 6.
+- `progressRules` with `dimension` values for the supported difficulty dimensions.
+- Fallback rewards for cases where a slot is complete but no evidence-specific rule is available.
+
+The source does not list individual bosses. Journal metadata supplies the complete encounter list, including bosses the character has not killed.
+
+### Mythic+ Definitions
+
+Mythic+ activities normally contain:
+
+- No Journal `sourceIds`; an empty array is expected.
+- Three slots with `unit: "runs"` and requirements such as 1, 4, and 8.
+- `progressRules` with `dimension: null` and `minimumValue` thresholds for Mythic+ levels.
+- Fallback rewards for completed slots without a more specific run-level rule.
+
+The calculator selects and sorts the weekly runs. The source definition does not contain dungeon names, run identities, or frontend display assumptions.
+
+### Delve Definitions
+
+Delve activities normally contain:
+
+- No Journal `sourceIds`; an empty array is expected.
+- Three slots with `unit: "delves"` and requirements such as 2, 4, and 8.
+- `progressRules` with `dimension: null` and `minimumValue` thresholds for configured Delve tiers.
+- Fallback rewards for completed slots without a more specific tier rule.
+
+The calculator subtracts a matching season/revision/hash baseline from current statistics. A revision change creates a fresh baseline and returns zero initial progress rather than subtracting across seasons.
+
+Unknown future kinds are allowed by the format and are returned through the generic unsupported-section path until a calculation provider is implemented.
+
+## Representative Midnight Season 1 Example
+
+`definitions/midnight-s1/midnight-s1-r1.json` is a representative standard-season definition. It uses:
+
+- Public season ID `midnight-s1`.
+- Diagnostic Blizzard source season ID `17`.
+- The `The Venomous Abyss` Journal instance source `wow:journal-instance:1320`.
+- Raid, Mythic+, and Delve activities.
+- Standard 2/4/6 raid, 1/4/8 Mythic+, and 2/4/8 Delve slot shapes.
+- Dimension-based raid rewards and value-based Mythic+/Delve rewards.
+
+The item levels in this example are illustrative configuration values showing the complete shape. They must be replaced or approved by the API content owner before publishing a production revision.
+
 ## Generated Revision Artifact
 
 The CLI converts a source file into:
