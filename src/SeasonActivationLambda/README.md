@@ -13,6 +13,7 @@ The stack exports these values for the configuration CLI and GitHub Actions work
 | `SchedulerGroupArn` | IAM and operational discovery |
 | `SchedulerRoleArn` | EventBridge Scheduler `Target.RoleArn` |
 | `SchedulerDeadLetterQueueArn` | EventBridge Scheduler `Target.DeadLetterConfig` |
+| `AlertsTopicArn` | SNS topic for the dead-letter queue alarm; subscribe it to the environment alerting destination |
 
 ## Dynamic Schedule Shape
 
@@ -47,6 +48,8 @@ The schedule name must be deterministic and no longer than the EventBridge Sched
 
 ## IAM Boundary
 
-The activation Lambda role can read, write, and delete objects only below `season-config/*`. The scheduler execution role can invoke only the activation Lambda and send messages to the activation dead-letter queue. The GitHub configuration-delivery role must receive explicit permission to create, update, inspect, and delete schedules in the named scheduler group, invoke the activation Lambda for immediate operations, and pass only the scheduler execution role.
+The activation Lambda role can read, write, and delete objects only below `season-config/*`. The scheduler execution role can be assumed only by EventBridge Scheduler in the configured AWS account and schedule group; it can invoke only the activation Lambda and send messages to the activation dead-letter queue. The GitHub configuration-delivery role must receive explicit permission to create, update, inspect, and delete schedules in the named scheduler group, invoke the activation Lambda for immediate operations, and pass only the scheduler execution role.
+
+The stack alarms when the dead-letter queue contains a visible message and sends the alarm to `AlertsTopicArn`. The environment owner must subscribe that topic to the operational alert destination as part of deployment; the stack intentionally does not embed an email address or another environment-specific subscription.
 
 The deployment identity also needs `iam:PassRole` for the activation Lambda execution role and the scheduler execution role when CloudFormation creates or updates the stack. These permissions should be resource-scoped and reviewed separately from the runtime roles.

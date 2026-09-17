@@ -79,7 +79,19 @@
               "Principal": {
                 "Service": "scheduler.amazonaws.com"
               },
-              "Action": "sts:AssumeRole"
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "aws:SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                  }
+                },
+                "ArnEquals": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule-group/${VaultPreviewSchedulerGroupName}"
+                  }
+                }
+              }
             }
           ]
         },
@@ -111,6 +123,42 @@
                 }
               ]
             }
+          }
+        ]
+      }
+    },
+    "SeasonActivationAlertsTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": "vault-preview-season-activation-alerts"
+      }
+    },
+    "SeasonActivationDeadLetterAlarm": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmDescription": "Season activation scheduler messages require operator attention.",
+        "Namespace": "AWS/SQS",
+        "MetricName": "ApproximateNumberOfMessagesVisible",
+        "Dimensions": [
+          {
+            "Name": "QueueName",
+            "Value": {
+              "Fn::GetAtt": [
+                "SeasonActivationSchedulerDeadLetterQueue",
+                "QueueName"
+              ]
+            }
+          }
+        ],
+        "Statistic": "Maximum",
+        "Period": 60,
+        "EvaluationPeriods": 1,
+        "Threshold": 0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching",
+        "AlarmActions": [
+          {
+            "Ref": "SeasonActivationAlertsTopic"
           }
         ]
       }
@@ -157,6 +205,12 @@
           "SeasonActivationSchedulerDeadLetterQueue",
           "Arn"
         ]
+      }
+    },
+    "AlertsTopicArn": {
+      "Description": "SNS topic that must be subscribed by the environment alerting owner.",
+      "Value": {
+        "Ref": "SeasonActivationAlertsTopic"
       }
     }
   }
