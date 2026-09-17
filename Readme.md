@@ -59,6 +59,13 @@ The functions expect these SSM parameters in the deployment region:
 - `/Blizzard/Token`
 - `/Blizzard/TokenExpires`
 
+Season-aware Delve baseline refreshes also require the active revision provider environment values until the durable configuration endpoint is wired by T08:
+
+- `VAULT_PREVIEW_SEASON_ID`
+- `VAULT_PREVIEW_SEASON_REVISION`
+- `VAULT_PREVIEW_SEASON_REVISION_HASH`
+- Optional `VAULT_PREVIEW_SOURCE_SEASON_ID`
+
 The API and scheduled-function SAM templates create Lambda execution roles with access limited to the `/Blizzard/*` parameter path and the cache bucket. The token function is deployed directly and therefore needs a separately created execution role.
 
 ## AWS Setup

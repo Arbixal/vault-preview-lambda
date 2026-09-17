@@ -13,6 +13,7 @@
     </ItemGroup>
     <ItemGroup>
       <ProjectReference Include="..\Infrastructure.Blizzard\Infrastructure.Blizzard.csproj" />
+      <ProjectReference Include="..\VaultShared\VaultShared.csproj" />
     </ItemGroup>
 
 </Project>

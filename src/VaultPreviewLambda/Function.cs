@@ -8,6 +8,7 @@ using VaultPreview.RaiderIo.Models;
 using VaultPreview.VaultCache;
 using VaultPreview.VaultCache.Models;
 using VaultPreviewLambda.Models;
+using VaultShared.Seasons;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
@@ -19,16 +20,19 @@ public class Function
     private readonly IBlizzardApiHandler _blizzardApiHandler;
     private readonly IRaiderIoHandler _raiderIoHandler;
     private readonly IVaultCacheHandler _vaultCacheHandler;
+    private readonly IActiveSeasonRevisionProvider _activeSeasonRevisionProvider;
 
     public Function(
         IBlizzardApiHandler blizzardApiHandler,
         IRaiderIoHandler raiderIoHandler,
-        IVaultCacheHandler vaultCacheHandler
+        IVaultCacheHandler vaultCacheHandler,
+        IActiveSeasonRevisionProvider activeSeasonRevisionProvider
         )
     {
         _blizzardApiHandler = blizzardApiHandler;
         _raiderIoHandler = raiderIoHandler;
         _vaultCacheHandler = vaultCacheHandler;
+        _activeSeasonRevisionProvider = activeSeasonRevisionProvider;
     }
     
     /// <summary>
@@ -59,7 +63,8 @@ public class Function
 
         characterProgress.Raid = await _getBlizzardRaidData(region, realm, character, characterProgress.Season);
 
-        characterProgress.Delves = await _getDelveData(region, realm, character);
+        ActiveSeasonRevision? activeSeason = await _activeSeasonRevisionProvider.GetActive();
+        characterProgress.Delves = await _getDelveData(region, realm, character, activeSeason);
 
         (characterProgress.PlayerClass, characterProgress.Dungeons) = await _getRaiderIoMythicPlusData(region, realm, character);
         
@@ -146,7 +151,11 @@ public class Function
         return (string.IsNullOrEmpty(response.Class) ? string.Empty : _trimClassName(response.Class), weeklyRuns.ToList());
     }
 
-    private async Task<Dictionary<int, int>> _getDelveData(string region, string realm, string character)
+    private async Task<Dictionary<int, int>> _getDelveData(
+        string region,
+        string realm,
+        string character,
+        ActiveSeasonRevision? activeSeason)
     {
         Dictionary<int, int> delveData = new Dictionary<int, int>
         {
@@ -163,26 +172,38 @@ public class Function
             [11] = 0,
         };
         
+        if (activeSeason == null)
+        {
+            Console.WriteLine("No active season revision is configured; skipping Delve baseline calculation.");
+            return delveData;
+        }
+
         CharacterData? characterData = await _vaultCacheHandler.GetCharacter(region, realm, character);
         
         Dictionary<int,int> delveStatistics = await _blizzardApiHandler.GetDelveStatistics(region, realm, character);
         
-        if (characterData == null)
+        bool baselineMatches = characterData != null &&
+                               characterData.SeasonId == activeSeason.SeasonId &&
+                               characterData.SeasonRevision == activeSeason.Revision &&
+                               characterData.SeasonRevisionHash == activeSeason.RevisionHash;
+        if (!baselineMatches)
         {
-            Console.WriteLine("characterData doesn't exist");
-            // Doesn't exist, should create it and save it
-            characterData = new CharacterData(character, realm, region);
-            characterData.SetDelveData(delveStatistics);
+            Console.WriteLine("Character baseline is missing or belongs to another season revision.");
+            characterData ??= new CharacterData(character, realm, region);
+            characterData.SetDelveBaseline(delveStatistics, activeSeason);
 
             await _vaultCacheHandler.SaveCharacter(characterData);
             return delveData;
         }
 
-        for (int i = 1; i <= 11; ++i)
+        CharacterData baseline = characterData!;
+        foreach (int level in delveStatistics.Keys.OrderBy(x => x))
         {
-            delveData[i] = Math.Max(0, delveStatistics[i] - characterData.DelvesCompleted[i]);
+            delveData[level] = Math.Max(
+                0,
+                delveStatistics.GetValueOrDefault(level) - baseline.DelvesCompleted.GetValueOrDefault(level));
             
-            Console.WriteLine($"Delve {i}: {delveStatistics[i]} - {characterData.DelvesCompleted[i]} = {delveData[i]}");
+            Console.WriteLine($"Delve {level}: {delveStatistics.GetValueOrDefault(level)} - {baseline.DelvesCompleted.GetValueOrDefault(level)} = {delveData[level]}");
         }
 
         return delveData;

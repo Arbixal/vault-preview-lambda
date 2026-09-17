@@ -6,6 +6,7 @@ using VaultPreviewLambda.Calculations;
 using VaultPreview.RaiderIo;
 using VaultPreview.VaultCache;
 using VaultShared;
+using VaultShared.Seasons;
 
 namespace VaultPreviewLambda;
 
@@ -19,6 +20,7 @@ public class Startup
         services.AddSingleton<VaultProgressCalculator>();
         services.AddSingleton<IRaiderIoHandler, RaiderIoHandler>();
         services.AddSingleton<ISecretHandler, SecretHandler>();
+        services.AddSingleton<IActiveSeasonRevisionProvider, EnvironmentActiveSeasonRevisionProvider>();
         services.AddSingleton<IVaultCacheHandler, VaultCacheHandler>();
         services.AddVaultCache();
         services.AddHttpClient();

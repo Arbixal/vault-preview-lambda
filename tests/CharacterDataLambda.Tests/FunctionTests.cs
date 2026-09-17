@@ -4,6 +4,7 @@ using VaultPreview.Blizzard;
 using VaultPreview.Blizzard.Models;
 using VaultPreview.VaultCache;
 using VaultPreview.VaultCache.Models;
+using VaultShared.Seasons;
 using Xunit;
 
 namespace CharacterDataLambda.Tests;
@@ -18,7 +19,10 @@ public class FunctionTests
         FakeBlizzardApiHandler blizzardApiHandler = new(missingCharacter.Name!);
         FakeVaultCacheHandler vaultCacheHandler = new(missingCharacter, availableCharacter);
 
-        string result = await new CharacterDataLambda.Function(blizzardApiHandler, vaultCacheHandler)
+        string result = await new CharacterDataLambda.Function(
+                blizzardApiHandler,
+                vaultCacheHandler,
+                new FakeActiveSeasonRevisionProvider())
             .FunctionHandler(string.Empty, null!);
 
         Assert.Equal("0k", result);
@@ -27,6 +31,11 @@ public class FunctionTests
         Assert.Equal(missingCharacter.FullName, vaultCacheHandler.DeletedCharacters[0].FullName);
         Assert.Single(vaultCacheHandler.SavedCharacters);
         Assert.Equal(availableCharacter.FullName, vaultCacheHandler.SavedCharacters[0].FullName);
+        Assert.Equal("midnight-s2", vaultCacheHandler.SavedCharacters[0].SeasonId);
+        Assert.Equal("midnight-s2-r1", vaultCacheHandler.SavedCharacters[0].SeasonRevision);
+        Assert.Equal(
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+            vaultCacheHandler.SavedCharacters[0].SeasonRevisionHash);
     }
 
     private sealed class FakeBlizzardApiHandler(string missingCharacter) : IBlizzardApiHandler
@@ -79,5 +88,15 @@ public class FunctionTests
             DeletedCharacters.Add(new CharacterData(name, realm, region));
             return Task.FromResult(true);
         }
+    }
+
+    private sealed class FakeActiveSeasonRevisionProvider : IActiveSeasonRevisionProvider
+    {
+        public Task<ActiveSeasonRevision?> GetActive(CancellationToken cancellationToken = default) =>
+            Task.FromResult<ActiveSeasonRevision?>(new ActiveSeasonRevision(
+                "midnight-s2",
+                "midnight-s2-r1",
+                "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+                18));
     }
 }

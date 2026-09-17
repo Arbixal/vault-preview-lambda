@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using VaultPreview.Blizzard;
 using VaultPreview.VaultCache;
 using VaultShared;
+using VaultShared.Seasons;
 
 namespace CharacterDataLambda;
 
@@ -14,6 +15,7 @@ public class Startup
         services.AddSingleton<IBlizzardApiHandler, BlizzardApiHandler>();
         services.AddSingleton<BlizzardJournalMetadataProvider>();
         services.AddSingleton<ISecretHandler, SecretHandler>();
+        services.AddSingleton<IActiveSeasonRevisionProvider, EnvironmentActiveSeasonRevisionProvider>();
         services.AddSingleton<IVaultCacheHandler, VaultCacheHandler>();
         services.AddVaultCache();
         services.AddHttpClient();
