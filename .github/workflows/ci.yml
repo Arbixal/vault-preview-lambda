@@ -28,6 +28,7 @@ jobs:
       - name: Set up AWS SAM CLI
         uses: aws-actions/setup-sam@v2
         with:
+          version: 1.166.2
           use-installer: true
 
       - name: Set up Node.js
