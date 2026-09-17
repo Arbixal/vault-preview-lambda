@@ -1,6 +1,7 @@
 ﻿using Amazon.S3;
 using Microsoft.Extensions.DependencyInjection;
 using VaultPreview.Blizzard;
+using VaultPreview.SeasonConfigurationInfrastructure;
 using VaultShared.Seasons;
 
 namespace VaultPreview.VaultCache;

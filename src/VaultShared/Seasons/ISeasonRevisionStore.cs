@@ -2,6 +2,11 @@ namespace VaultShared.Seasons;
 
 public interface ISeasonRevisionStore : ISeasonRevisionProvider
 {
+    Task<SeasonRevision?> GetRevision(
+        string seasonId,
+        string revisionId,
+        CancellationToken cancellationToken = default);
+
     Task SaveRevision(SeasonRevision revision, CancellationToken cancellationToken = default);
 
     Task Activate(

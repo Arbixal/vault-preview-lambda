@@ -1,0 +1,52 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Description": "Season activation Lambda for immutable Vault Preview season revisions. This template is partially managed by Amazon.Lambda.Annotations (v2.4.0.0).",
+  "Parameters": {
+    "VaultPreviewDataBucket": {
+      "Type": "String",
+      "Default": "vault-preview-data",
+      "Description": "Durable S3 bucket containing season revisions and activation state."
+    }
+  },
+  "Resources": {
+    "SeasonActivationLambdaFunctionFunctionHandlerGenerated": {
+      "Type": "AWS::Serverless::Function",
+      "Metadata": {
+        "Tool": "Amazon.Lambda.Annotations"
+      },
+      "Properties": {
+        "Runtime": "dotnet10",
+        "CodeUri": ".",
+        "MemorySize": 256,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "VAULT_PREVIEW_DATA_BUCKET": {
+              "Ref": "VaultPreviewDataBucket"
+            }
+          }
+        },
+        "Policies": [
+          "AWSLambdaBasicExecutionRole",
+          {
+            "Statement": {
+              "Sid": "SeasonConfigurationObjectAccessStatement",
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:s3:::${VaultPreviewDataBucket}/season-config/*"
+              }
+            }
+          }
+        ],
+        "PackageType": "Zip",
+        "Handler": "SeasonActivationLambda::SeasonActivationLambda.Function_FunctionHandler_Generated::FunctionHandler"
+      }
+    }
+  }
+}

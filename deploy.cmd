@@ -31,4 +31,9 @@ dotnet lambda deploy-serverless character-data --region "%AWS_REGION%" --s3-buck
 if errorlevel 1 exit /b 1
 
 popd
+pushd "%~dp0src\SeasonActivationLambda"
+dotnet lambda deploy-serverless season-activation --region "%AWS_REGION%" --s3-bucket "%LAMBDA_BUILD_BUCKET%"
+if errorlevel 1 exit /b 1
+
+popd
 endlocal

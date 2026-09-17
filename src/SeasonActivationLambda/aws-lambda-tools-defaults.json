@@ -1,0 +1,14 @@
+{
+  "Information": [
+    "This file provides default values for the AWS Lambda .NET CLI.",
+    "Run dotnet lambda help for command documentation."
+  ],
+  "region": "ap-southeast-2",
+  "configuration": "Release",
+  "template": "serverless.template",
+  "function-architecture": "x86_64",
+  "function-runtime": "dotnet10",
+  "function-memory-size": 256,
+  "function-timeout": 30,
+  "function-handler": "SeasonActivationLambda::SeasonActivationLambda.Function_FunctionHandler_Generated::FunctionHandler"
+}

@@ -1,6 +1,6 @@
 using VaultShared.Seasons;
 
-namespace VaultPreview.VaultCache;
+namespace VaultPreview.SeasonConfigurationInfrastructure;
 
 public sealed class SeasonRevisionDocument
 {

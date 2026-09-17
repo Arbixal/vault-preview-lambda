@@ -65,18 +65,27 @@ jobs:
         run: >-
           dotnet lambda deploy-serverless vault-preview
           --region "$AWS_REGION"
-           --s3-bucket "$LAMBDA_BUILD_BUCKET"
-           --configuration Release
-           --disable-interactive true
+          --s3-bucket "$LAMBDA_BUILD_BUCKET"
+          --configuration Release
+          --disable-interactive true
 
       - name: Deploy CharacterDataLambda
         working-directory: src/CharacterDataLambda
         run: >-
           dotnet lambda deploy-serverless character-data
           --region "$AWS_REGION"
-           --s3-bucket "$LAMBDA_BUILD_BUCKET"
-           --configuration Release
-           --disable-interactive true
+          --s3-bucket "$LAMBDA_BUILD_BUCKET"
+          --configuration Release
+          --disable-interactive true
+
+      - name: Deploy SeasonActivationLambda
+        working-directory: src/SeasonActivationLambda
+        run: >-
+          dotnet lambda deploy-serverless season-activation
+          --region "$AWS_REGION"
+          --s3-bucket "$LAMBDA_BUILD_BUCKET"
+          --configuration Release
+          --disable-interactive true
 
       - name: Deploy BlizzardTokenHandler
         working-directory: src/BlizzardTokenHandler

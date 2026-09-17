@@ -1,15 +1,16 @@
 using VaultShared.Seasons;
-using VaultPreview.VaultCache;
+using VaultPreview.SeasonConfigurationInfrastructure;
 using Xunit;
+using SeasonConfigurationModel = VaultShared.Seasons.SeasonConfiguration;
 
-namespace Infrastructure.VaultCache.Tests;
+namespace Infrastructure.SeasonConfiguration.Tests;
 
 public class S3SeasonRevisionProviderTests
 {
     [Fact]
     public void IsValid_AcceptsRevisionWithMatchingValidatedHash()
     {
-        SeasonConfiguration configuration = _createConfiguration();
+        SeasonConfigurationModel configuration = _createConfiguration();
         SeasonRevision revision = SeasonRevision.Create("future-r1", configuration);
         SeasonRevisionDocument document = new()
         {
@@ -66,9 +67,9 @@ public class S3SeasonRevisionProviderTests
         Assert.Same(pending, S3SeasonRevisionProvider.SelectActivePointer(pending, now.AddHours(1)));
     }
 
-    private static SeasonConfiguration _createConfiguration()
+    private static SeasonConfigurationModel _createConfiguration()
     {
-        return new SeasonConfiguration(
+        return new SeasonConfigurationModel(
             "future-season",
             "Future Season",
             "Future",

@@ -48,6 +48,7 @@ The API repository owns this schema. Shared fixtures and automated schema valida
 
 - `VaultPreviewLambda` exposes the legacy `GET /vault-progress/{region}/{realm}/{character}` route and the versioned `GET /v1/app-config` and `GET /v1/vault-progress/{region}/{realm}/{character}` routes.
 - `CharacterDataLambda` refreshes cached delve statistics on the scheduled Tuesday trigger.
+- `SeasonActivationLambda` promotes validated immutable season revisions and is invoked by the configuration CLI or EventBridge Scheduler.
 - `BlizzardTokenHandler` refreshes the Blizzard OAuth token stored in AWS Systems Manager Parameter Store.
 
 The API stores Blizzard Journal metadata in the existing `vault-preview-data` S3 bucket under `journal-metadata/v1/`. Entries are fresh for 24 hours and may be served as stale last-known-good metadata for up to seven days when Blizzard is unavailable.
