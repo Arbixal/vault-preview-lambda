@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="AWSSDK.Lambda" Version="4.0.104" />
     <PackageReference Include="AWSSDK.S3" Version="4.0.103.2" />
+    <PackageReference Include="AWSSDK.Scheduler" Version="4.0.100.14" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
   </ItemGroup>
 

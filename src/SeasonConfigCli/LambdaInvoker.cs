@@ -1,3 +1,5 @@
+using System;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Amazon.Lambda;
@@ -31,11 +33,18 @@ public sealed class LambdaInvoker : ILambdaInvoker
             },
             cancellationToken);
 
-        string responsePayload;
-        using (StreamReader reader = new StreamReader(response.Payload!))
+        if (response.FunctionError != null)
         {
-            responsePayload = await reader.ReadToEndAsync();
+            string errorPayload = response.Payload != null
+                ? await new StreamReader(response.Payload).ReadToEndAsync()
+                : string.Empty;
+            throw new InvalidOperationException(
+                $"Lambda function error ({response.FunctionError}): {errorPayload}");
         }
+
+        string responsePayload = response.Payload != null
+            ? await new StreamReader(response.Payload).ReadToEndAsync()
+            : "{}";
         SeasonActivationResponse? result = JsonSerializer.Deserialize<SeasonActivationResponse>(
             responsePayload,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true });

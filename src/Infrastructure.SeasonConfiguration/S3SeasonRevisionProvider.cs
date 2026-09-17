@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Amazon.S3;
@@ -122,11 +123,26 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
             Configuration = snapshot,
             RevisionHash = revision.RevisionHash
         };
-        await _putDocument(
-            GetRevisionKey(snapshot.Id, revision.Id),
-            document,
-            ifNoneMatch: "*",
-            cancellationToken);
+
+        try
+        {
+            await _putDocument(
+                GetRevisionKey(snapshot.Id, revision.Id),
+                document,
+                ifNoneMatch: "*",
+                cancellationToken);
+        }
+        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+        {
+            SeasonRevisionDocument? existingDocument = await _getDocument<SeasonRevisionDocument>(
+                GetRevisionKey(snapshot.Id, revision.Id),
+                cancellationToken);
+            if (!IsValid(existingDocument) ||
+                !string.Equals(existingDocument!.RevisionHash, revision.RevisionHash, StringComparison.Ordinal))
+            {
+                throw;
+            }
+        }
     }
 
     public async Task Activate(

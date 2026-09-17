@@ -1,7 +1,8 @@
 using System;
 using Amazon;
-using Amazon.S3;
 using Amazon.Lambda;
+using Amazon.S3;
+using Amazon.Scheduler;
 using VaultShared.Seasons;
 using VaultPreview.SeasonConfigurationInfrastructure;
 
@@ -20,6 +21,8 @@ public static class Program
         string command = args[0].ToLowerInvariant();
         string? awsRegion = Environment.GetEnvironmentVariable("AWS_REGION");
         string? activationFunctionName = Environment.GetEnvironmentVariable("VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME");
+        string? schedulerRoleArn = Environment.GetEnvironmentVariable("VAULT_PREVIEW_SCHEDULER_ROLE_ARN");
+        string? schedulerGroupName = Environment.GetEnvironmentVariable("VAULT_PREVIEW_SCHEDULER_GROUP");
         RegionEndpoint? region = null;
         if (!string.IsNullOrEmpty(awsRegion))
         {
@@ -34,7 +37,18 @@ public static class Program
             lambdaInvoker = new LambdaInvoker(new AmazonLambdaClient(region));
         }
 
-        SeasonConfigurationCli cli = new(store, lambdaInvoker, activationFunctionName);
+        IScheduler? scheduler = null;
+        if (!string.IsNullOrEmpty(schedulerRoleArn) && !string.IsNullOrEmpty(schedulerGroupName) && region != null)
+        {
+            scheduler = new EventBridgeScheduler(
+                new AmazonSchedulerClient(region),
+                new AmazonLambdaClient(region),
+                activationFunctionName ?? string.Empty,
+                schedulerRoleArn,
+                schedulerGroupName);
+        }
+
+        SeasonConfigurationCli cli = new(store, lambdaInvoker, scheduler, activationFunctionName, schedulerRoleArn, schedulerGroupName);
 
         return command switch
         {

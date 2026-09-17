@@ -79,11 +79,46 @@ public class SeasonConfigurationCliTests
     }
 
     [Fact]
-    public async Task Schedule_FutureActivation_WritesScheduledPointer()
+    public async Task Publish_Idempotent_RePublishingSameContentReturnsZero()
     {
         FakeS3Client s3Client = new();
         SeasonConfiguration configuration = _createConfiguration();
         SeasonConfigurationCli cli = CreateCli(s3Client);
+
+        int firstResult = await cli.PublishAsync(
+            WriteTempFile(Serialize(configuration)),
+            "future-season",
+            "future-r1");
+        int secondResult = await cli.PublishAsync(
+            WriteTempFile(Serialize(configuration)),
+            "future-season",
+            "future-r1");
+
+        Assert.Equal(0, firstResult);
+        Assert.Equal(0, secondResult);
+    }
+
+    [Fact]
+    public async Task Publish_InvalidRevisionId_ReturnsOne()
+    {
+        SeasonConfiguration configuration = _createConfiguration();
+        SeasonConfigurationCli cli = CreateCli();
+
+        int result = await cli.PublishAsync(
+            WriteTempFile(Serialize(configuration)),
+            "future-season",
+            "invalid-revision-id");
+
+        Assert.Equal(1, result);
+    }
+
+    [Fact]
+    public async Task Schedule_FutureActivation_WritesScheduledPointer()
+    {
+        FakeS3Client s3Client = new();
+        FakeScheduler scheduler = new();
+        SeasonConfiguration configuration = _createConfiguration();
+        SeasonConfigurationCli cli = CreateCli(s3Client, null, scheduler, "test-function", "test-role", "test-group");
 
         await cli.PublishAsync(
             WriteTempFile(Serialize(configuration)),
@@ -95,6 +130,8 @@ public class SeasonConfigurationCliTests
 
         Assert.Equal(0, result);
         Assert.True(s3Client.Contains("season-config/v1/scheduled.json"));
+        Assert.Equal("test-group", scheduler.CreatedGroupName);
+        Assert.Equal("future-season-future-r1", scheduler.CreatedScheduleName);
     }
 
     [Fact]
@@ -111,8 +148,9 @@ public class SeasonConfigurationCliTests
     public async Task Cancel_ClearsPendingSchedule()
     {
         FakeS3Client s3Client = new();
+        FakeScheduler scheduler = new();
         SeasonConfiguration configuration = _createConfiguration();
-        SeasonConfigurationCli cli = CreateCli(s3Client);
+        SeasonConfigurationCli cli = CreateCli(s3Client, null, scheduler, "test-function", "test-role", "test-group");
 
         await cli.PublishAsync(
             WriteTempFile(Serialize(configuration)),
@@ -133,7 +171,7 @@ public class SeasonConfigurationCliTests
         FakeS3Client s3Client = new();
         FakeLambdaInvoker lambdaInvoker = new();
         SeasonConfiguration configuration = _createConfiguration();
-        SeasonConfigurationCli cli = CreateCli(s3Client, lambdaInvoker, "test-function");
+        SeasonConfigurationCli cli = CreateCli(s3Client, lambdaInvoker, null, "test-function");
 
         await cli.PublishAsync(
             WriteTempFile(Serialize(configuration)),
@@ -153,7 +191,7 @@ public class SeasonConfigurationCliTests
         FakeS3Client s3Client = new();
         FakeLambdaInvoker lambdaInvoker = new();
         SeasonConfiguration configuration = _createConfiguration();
-        SeasonConfigurationCli cli = CreateCli(s3Client, lambdaInvoker, "test-function");
+        SeasonConfigurationCli cli = CreateCli(s3Client, lambdaInvoker, null, "test-function");
 
         await cli.PublishAsync(
             WriteTempFile(Serialize(configuration)),
@@ -168,11 +206,11 @@ public class SeasonConfigurationCliTests
     }
 
     [Fact]
-    public async Task Activate_WithoutLambdaInvoker_UsesStoreDirectly()
+    public async Task Activate_WithoutLambdaInvoker_FailsClosed()
     {
         FakeS3Client s3Client = new();
         SeasonConfiguration configuration = _createConfiguration();
-        SeasonConfigurationCli cli = CreateCli(s3Client, null, null);
+        SeasonConfigurationCli cli = CreateCli(s3Client, null, null, null);
 
         await cli.PublishAsync(
             WriteTempFile(Serialize(configuration)),
@@ -181,15 +219,15 @@ public class SeasonConfigurationCliTests
 
         int result = await cli.ActivateAsync("future-season", "future-r1", null);
 
-        Assert.Equal(0, result);
+        Assert.Equal(1, result);
     }
 
     [Fact]
-    public async Task Rollback_WithoutLambdaInvoker_UsesStoreDirectly()
+    public async Task Rollback_WithoutLambdaInvoker_FailsClosed()
     {
         FakeS3Client s3Client = new();
         SeasonConfiguration configuration = _createConfiguration();
-        SeasonConfigurationCli cli = CreateCli(s3Client, null, null);
+        SeasonConfigurationCli cli = CreateCli(s3Client, null, null, null);
 
         await cli.PublishAsync(
             WriteTempFile(Serialize(configuration)),
@@ -198,7 +236,7 @@ public class SeasonConfigurationCliTests
 
         int result = await cli.RollbackAsync("future-season", "future-r1", null);
 
-        Assert.Equal(0, result);
+        Assert.Equal(1, result);
     }
 
     [Fact]
@@ -242,11 +280,14 @@ public class SeasonConfigurationCliTests
     private SeasonConfigurationCli CreateCli(
         FakeS3Client? s3Client = null,
         FakeLambdaInvoker? lambdaInvoker = null,
-        string? functionName = null)
+        FakeScheduler? scheduler = null,
+        string? functionName = null,
+        string? schedulerRoleArn = null,
+        string? schedulerGroupName = null)
     {
         s3Client ??= new FakeS3Client();
         ISeasonRevisionStore store = new S3SeasonRevisionProvider(s3Client);
-        return new SeasonConfigurationCli(store, lambdaInvoker, functionName);
+        return new SeasonConfigurationCli(store, lambdaInvoker, scheduler, functionName, schedulerRoleArn, schedulerGroupName);
     }
 
     private static SeasonConfiguration _createConfiguration()
@@ -291,6 +332,37 @@ public class SeasonConfigurationCliTests
         string path = Path.Combine(Path.GetTempPath(), $"season-config-test-{Guid.NewGuid()}.json");
         File.WriteAllText(path, content);
         return path;
+    }
+
+    private sealed class FakeScheduler : IScheduler
+    {
+        public string? CreatedScheduleName { get; private set; }
+        public string? DeletedScheduleName { get; private set; }
+        public string? CreatedGroupName { get; private set; }
+        public string? DeletedGroupName { get; private set; }
+
+        public Task CreateScheduleAsync(
+            string groupName,
+            string scheduleName,
+            DateTimeOffset activationAt,
+            string lambdaFunctionArn,
+            string roleArn,
+            CancellationToken cancellationToken = default)
+        {
+            CreatedGroupName = groupName;
+            CreatedScheduleName = scheduleName;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteScheduleAsync(
+            string groupName,
+            string scheduleName,
+            CancellationToken cancellationToken = default)
+        {
+            DeletedGroupName = groupName;
+            DeletedScheduleName = scheduleName;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeLambdaInvoker : ILambdaInvoker
