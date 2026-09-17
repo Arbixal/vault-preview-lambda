@@ -77,7 +77,6 @@ jobs:
           --s3-bucket "$LAMBDA_BUILD_BUCKET"
           --configuration Release
           --disable-interactive true
-
       - name: Deploy SeasonActivationLambda
         working-directory: src/SeasonActivationLambda
         run: >-
