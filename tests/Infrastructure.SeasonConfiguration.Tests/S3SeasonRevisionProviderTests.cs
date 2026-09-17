@@ -1,3 +1,8 @@
+using System.Net;
+using Amazon;
+using Amazon.Runtime;
+using Amazon.S3;
+using Amazon.S3.Model;
 using VaultShared.Seasons;
 using VaultPreview.SeasonConfigurationInfrastructure;
 using Xunit;
@@ -67,6 +72,48 @@ public class S3SeasonRevisionProviderTests
         Assert.Same(pending, S3SeasonRevisionProvider.SelectActivePointer(pending, now.AddHours(1)));
     }
 
+    [Fact]
+    public async Task ActivateAndRollback_AreIdempotentAndClearPendingSchedule()
+    {
+        FakeS3Client s3Client = new();
+        S3SeasonRevisionProvider provider = new(s3Client);
+        SeasonRevision first = SeasonRevision.Create("future-r1", _createConfiguration());
+        SeasonRevision second = SeasonRevision.Create(
+            "future-r2",
+            _createConfiguration() with { ShortLabel = "Future Revised" });
+
+        await provider.SaveRevision(first);
+        await provider.SaveRevision(second);
+        await provider.Activate("future-season", first.Id);
+        await provider.Activate("future-season", first.Id);
+        await provider.Schedule("future-season", second.Id, DateTimeOffset.UtcNow.AddHours(1));
+        await provider.Rollback("future-season", first.Id);
+
+        Assert.Equal(first.Id, (await provider.GetActiveRevision())?.Id);
+        Assert.False(s3Client.Contains("season-config/v1/scheduled.json"));
+    }
+
+    [Fact]
+    public async Task Activate_RejectsAStaleActivePointerEtag()
+    {
+        FakeS3Client s3Client = new();
+        S3SeasonRevisionProvider provider = new(s3Client);
+        SeasonRevision first = SeasonRevision.Create("future-r1", _createConfiguration());
+        SeasonRevision second = SeasonRevision.Create(
+            "future-r2",
+            _createConfiguration() with { ShortLabel = "Future Revised" });
+
+        await provider.SaveRevision(first);
+        await provider.SaveRevision(second);
+        await provider.Activate("future-season", first.Id);
+        s3Client.MutateBeforeNextConditionalPut = true;
+
+        await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+            provider.Activate("future-season", second.Id));
+
+        Assert.Equal(first.Id, (await provider.GetActiveRevision())?.Id);
+    }
+
     private static SeasonConfigurationModel _createConfiguration()
     {
         return new SeasonConfigurationModel(
@@ -93,5 +140,81 @@ public class S3SeasonRevisionProviderTests
                     ],
                     [])
             ]);
+    }
+
+    private sealed class FakeS3Client : AmazonS3Client
+    {
+        private readonly IDictionary<string, StoredObject> _objects =
+            new Dictionary<string, StoredObject>(StringComparer.Ordinal);
+        private int _etagCounter;
+
+        public FakeS3Client()
+            : base(new AnonymousAWSCredentials(), RegionEndpoint.USEast1)
+        {
+        }
+
+        public bool MutateBeforeNextConditionalPut { get; set; }
+
+        public bool Contains(string key) => _objects.ContainsKey(key);
+
+        public override Task<GetObjectResponse> GetObjectAsync(
+            GetObjectRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (!_objects.TryGetValue(request.Key, out StoredObject? stored))
+            {
+                throw new AmazonS3Exception("Not found") { StatusCode = HttpStatusCode.NotFound };
+            }
+
+            return Task.FromResult(new GetObjectResponse
+            {
+                ETag = stored.ETag,
+                ResponseStream = new MemoryStream(stored.Content, writable: false)
+            });
+        }
+
+        public override async Task<PutObjectResponse> PutObjectAsync(
+            PutObjectRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (MutateBeforeNextConditionalPut && request.IfMatch != null)
+            {
+                MutateBeforeNextConditionalPut = false;
+                if (_objects.TryGetValue(request.Key, out StoredObject? concurrentValue))
+                {
+                    _objects[request.Key] = concurrentValue with
+                    {
+                        ETag = $"\"etag-{++_etagCounter}\""
+                    };
+                }
+            }
+
+            _objects.TryGetValue(request.Key, out StoredObject? existing);
+            if (request.IfNoneMatch == "*" && existing != null ||
+                request.IfMatch != null && (existing == null || existing.ETag != request.IfMatch))
+            {
+                throw new AmazonS3Exception("Precondition failed")
+                {
+                    StatusCode = HttpStatusCode.PreconditionFailed
+                };
+            }
+
+            using MemoryStream content = new();
+            await request.InputStream!.CopyToAsync(content, cancellationToken);
+            _objects[request.Key] = new StoredObject(
+                content.ToArray(),
+                $"\"etag-{++_etagCounter}\"");
+            return new PutObjectResponse { ETag = _objects[request.Key].ETag };
+        }
+
+        public override Task<DeleteObjectResponse> DeleteObjectAsync(
+            DeleteObjectRequest request,
+            CancellationToken cancellationToken)
+        {
+            _objects.Remove(request.Key);
+            return Task.FromResult(new DeleteObjectResponse());
+        }
+
+        private sealed record StoredObject(byte[] Content, string ETag);
     }
 }
