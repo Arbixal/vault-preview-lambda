@@ -25,6 +25,12 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          version: 1.166.2
+          use-installer: true
+
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
@@ -38,6 +44,12 @@ jobs:
       - name: Validate contract fixtures
         working-directory: contracts/v1/fixtures
         run: npm ci && npm run validate
+
+      - name: Validate SAM templates
+        run: |
+          sam validate --lint --template-file src/VaultPreviewLambda/serverless.template
+          sam validate --lint --template-file src/CharacterDataLambda/serverless.template
+          sam validate --lint --template-file src/SeasonActivationLambda/serverless.template
 
       - name: Build
         run: dotnet build VaultPreviewLambda.sln --configuration Release --no-restore
