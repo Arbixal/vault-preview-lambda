@@ -3,8 +3,6 @@ using System.Globalization;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using Amazon.Lambda;
-using Amazon.Lambda.Model;
 using Amazon.Scheduler;
 using Amazon.Scheduler.Model;
 
@@ -13,54 +11,32 @@ namespace SeasonConfigCli;
 public sealed class EventBridgeScheduler : IScheduler
 {
     private readonly IAmazonScheduler _schedulerClient;
-    private readonly IAmazonLambda _lambdaClient;
-    private readonly string _functionName;
-    private readonly string _roleArn;
-    private readonly string _groupName;
 
-    public EventBridgeScheduler(
-        IAmazonScheduler schedulerClient,
-        IAmazonLambda lambdaClient,
-        string functionName,
-        string roleArn,
-        string groupName)
+    public EventBridgeScheduler(IAmazonScheduler schedulerClient)
     {
         _schedulerClient = schedulerClient;
-        _lambdaClient = lambdaClient;
-        _functionName = functionName;
-        _roleArn = roleArn;
-        _groupName = groupName;
     }
 
-    public async Task CreateScheduleAsync(
-        string groupName,
-        string scheduleName,
-        DateTimeOffset activationAt,
-        string lambdaFunctionArn,
-        string roleArn,
+    public async Task CreateOrUpdateScheduleAsync(
+        SchedulerScheduleRequest scheduleRequest,
         CancellationToken cancellationToken = default)
     {
-        string functionArn = string.IsNullOrEmpty(lambdaFunctionArn)
-            ? await GetFunctionArn(cancellationToken)
-            : lambdaFunctionArn;
-
-        string scheduleExpression = $"at({activationAt.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture)})";
+        _validateRequest(scheduleRequest);
+        DateTimeOffset activationAt = scheduleRequest.ActivationAt.ToUniversalTime();
+        string scheduleExpression = $"at({activationAt.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture)})";
 
         CreateScheduleRequest request = new()
         {
-            Name = scheduleName,
-            GroupName = groupName,
+            Name = scheduleRequest.ScheduleName,
+            GroupName = scheduleRequest.GroupName,
             ScheduleExpression = scheduleExpression,
-            ActionAfterCompletion = ActionAfterCompletion.DELETE,
-            Target = new Target
+            ScheduleExpressionTimezone = "UTC",
+            FlexibleTimeWindow = new FlexibleTimeWindow
             {
-                Arn = functionArn,
-                RoleArn = roleArn,
-                DeadLetterConfig = new Amazon.Scheduler.Model.DeadLetterConfig
-                {
-                    Arn = GetDeadLetterArn()
-                }
-            }
+                Mode = FlexibleTimeWindowMode.OFF
+            },
+            ActionAfterCompletion = ActionAfterCompletion.DELETE,
+            Target = _createTarget(scheduleRequest)
         };
 
         try
@@ -71,19 +47,16 @@ public sealed class EventBridgeScheduler : IScheduler
         {
             UpdateScheduleRequest updateRequest = new()
             {
-                Name = scheduleName,
-                GroupName = groupName,
+                Name = scheduleRequest.ScheduleName,
+                GroupName = scheduleRequest.GroupName,
                 ScheduleExpression = scheduleExpression,
-                ActionAfterCompletion = ActionAfterCompletion.DELETE,
-                Target = new Target
+                ScheduleExpressionTimezone = "UTC",
+                FlexibleTimeWindow = new FlexibleTimeWindow
                 {
-                    Arn = functionArn,
-                    RoleArn = roleArn,
-                    DeadLetterConfig = new Amazon.Scheduler.Model.DeadLetterConfig
-                    {
-                        Arn = GetDeadLetterArn()
-                    }
-                }
+                    Mode = FlexibleTimeWindowMode.OFF
+                },
+                ActionAfterCompletion = ActionAfterCompletion.DELETE,
+                Target = _createTarget(scheduleRequest)
             };
             await _schedulerClient.UpdateScheduleAsync(updateRequest, cancellationToken);
         }
@@ -109,16 +82,36 @@ public sealed class EventBridgeScheduler : IScheduler
         }
     }
 
-    private async Task<string> GetFunctionArn(CancellationToken cancellationToken)
+    private static Target _createTarget(SchedulerScheduleRequest request)
     {
-        GetFunctionResponse response = await _lambdaClient.GetFunctionAsync(
-            new GetFunctionRequest { FunctionName = _functionName },
-            cancellationToken);
-        return response.Configuration?.FunctionArn ?? _functionName;
+        return new Target
+        {
+            Arn = request.ActivationFunctionArn,
+            RoleArn = request.SchedulerRoleArn,
+            Input = request.Input,
+            DeadLetterConfig = new Amazon.Scheduler.Model.DeadLetterConfig
+            {
+                Arn = request.DeadLetterQueueArn
+            },
+            RetryPolicy = new RetryPolicy
+            {
+                MaximumEventAgeInSeconds = request.MaximumEventAgeInSeconds,
+                MaximumRetryAttempts = request.MaximumRetryAttempts
+            }
+        };
     }
 
-    private string GetDeadLetterArn()
+    private static void _validateRequest(SchedulerScheduleRequest request)
     {
-        return System.Environment.GetEnvironmentVariable("VAULT_PREVIEW_SCHEDULER_DEAD_LETTER_QUEUE_ARN") ?? string.Empty;
+        ArgumentNullException.ThrowIfNull(request);
+        if (string.IsNullOrWhiteSpace(request.GroupName) ||
+            string.IsNullOrWhiteSpace(request.ScheduleName) ||
+            string.IsNullOrWhiteSpace(request.ActivationFunctionArn) ||
+            string.IsNullOrWhiteSpace(request.SchedulerRoleArn) ||
+            string.IsNullOrWhiteSpace(request.DeadLetterQueueArn) ||
+            string.IsNullOrWhiteSpace(request.Input))
+        {
+            throw new ArgumentException("Scheduler group, name, target ARN, role ARN, dead-letter ARN, and input are required.");
+        }
     }
 }

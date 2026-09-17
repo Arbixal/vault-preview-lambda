@@ -132,6 +132,9 @@ public class FunctionTests
             CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 
+        public Task<SeasonSchedule?> GetScheduled(CancellationToken cancellationToken = default) =>
+            Task.FromResult<SeasonSchedule?>(null);
+
         public Task CancelSchedule(CancellationToken cancellationToken = default) =>
             Task.CompletedTask;
 

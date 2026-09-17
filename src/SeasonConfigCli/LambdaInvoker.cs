@@ -1,6 +1,3 @@
-using System;
-using System.Net;
-using System.Text;
 using System.Text.Json;
 using Amazon.Lambda;
 using Amazon.Lambda.Model;
@@ -33,21 +30,59 @@ public sealed class LambdaInvoker : ILambdaInvoker
             },
             cancellationToken);
 
-        if (response.FunctionError != null)
+        string responsePayload = await _readPayloadAsync(response.Payload, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(response.FunctionError))
         {
-            string errorPayload = response.Payload != null
-                ? await new StreamReader(response.Payload).ReadToEndAsync()
-                : string.Empty;
             throw new InvalidOperationException(
-                $"Lambda function error ({response.FunctionError}): {errorPayload}");
+                $"Lambda function error ({response.FunctionError}): {responsePayload}");
         }
 
-        string responsePayload = response.Payload != null
-            ? await new StreamReader(response.Payload).ReadToEndAsync()
-            : "{}";
-        SeasonActivationResponse? result = JsonSerializer.Deserialize<SeasonActivationResponse>(
-            responsePayload,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        return result ?? new SeasonActivationResponse();
+        if (string.IsNullOrWhiteSpace(responsePayload))
+            throw new InvalidOperationException("Activation Lambda returned an empty response.");
+
+        SeasonActivationResponse result;
+        try
+        {
+            result = JsonSerializer.Deserialize<SeasonActivationResponse>(
+                responsePayload,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidOperationException("Activation Lambda returned a null response.");
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidOperationException(
+                $"Activation Lambda returned malformed JSON: {exception.Message}",
+                exception);
+        }
+
+        string expectedStatus = string.Equals(
+            request.Operation,
+            "rollback",
+            StringComparison.OrdinalIgnoreCase)
+            ? "rolled_back"
+            : "activated";
+        if (!string.Equals(result.Status, expectedStatus, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(result.Operation, request.Operation, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(result.SeasonId, request.SeasonId, StringComparison.Ordinal) ||
+            !string.Equals(result.RevisionId, request.RevisionId, StringComparison.Ordinal) ||
+            !string.Equals(result.RevisionHash, request.RevisionHash, StringComparison.Ordinal) ||
+            result.ActivatedAt == default)
+        {
+            throw new InvalidOperationException(
+                "Activation Lambda returned a response that does not match the requested operation or revision.");
+        }
+
+        return result;
+    }
+
+    private static async Task<string> _readPayloadAsync(
+        System.IO.Stream? payload,
+        CancellationToken cancellationToken)
+    {
+        if (payload == null)
+            return string.Empty;
+
+        using StreamReader reader = new(payload);
+        return await reader.ReadToEndAsync(cancellationToken);
     }
 }

@@ -227,6 +227,21 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
             cancellationToken);
     }
 
+    public async Task<SeasonSchedule?> GetScheduled(CancellationToken cancellationToken = default)
+    {
+        ActiveSeasonPointer? pointer = await _getDocument<ActiveSeasonPointer>(
+            _SCHEDULED_KEY,
+            cancellationToken);
+        if (!_hasValidPointer(pointer))
+            return null;
+
+        return new SeasonSchedule(
+            pointer!.SeasonId,
+            pointer.Revision,
+            pointer.RevisionHash,
+            pointer.ActivationAt);
+    }
+
     public Task Rollback(
         string seasonId,
         string revisionId,

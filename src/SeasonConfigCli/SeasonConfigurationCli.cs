@@ -1,25 +1,26 @@
-using System;
 using System.Net;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Amazon.S3;
 using Amazon.S3.Model;
-using VaultShared.Seasons;
-using VaultPreview.SeasonConfigurationInfrastructure;
 using SeasonConfigCli.Request;
 using SeasonConfigCli.Response;
+using VaultPreview.SeasonConfigurationInfrastructure;
+using VaultShared.Seasons;
 
 namespace SeasonConfigCli;
 
 public sealed class SeasonConfigurationCli
 {
-    private readonly ISeasonRevisionStore _store;
+    private const int _MAX_SCHEDULE_NAME_LENGTH = 64;
+    private const int _SCHEDULER_MAXIMUM_EVENT_AGE_SECONDS = 86400;
+    private const int _SCHEDULER_MAXIMUM_RETRY_ATTEMPTS = 3;
+    private const string _SCHEDULE_NAME_PREFIX = "vault-preview-activate-";
+
+    private readonly ISeasonRevisionStore? _store;
     private readonly ILambdaInvoker? _lambdaInvoker;
     private readonly IScheduler? _scheduler;
-    private readonly string? _activationFunctionName;
-    private readonly string? _schedulerRoleArn;
-    private readonly string? _schedulerGroupName;
+    private readonly SeasonConfigurationCliOptions _options;
 
     private static readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -27,29 +28,36 @@ public sealed class SeasonConfigurationCli
         WriteIndented = false
     };
 
-    private static readonly Regex _revisionIdPattern = new(
-        @"^[a-z0-9]+(-[a-z0-9]+)*-r\d+$",
-        RegexOptions.Compiled);
+    private static readonly Regex _seasonIdPattern = new(
+        @"^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex _scheduleNamePattern = new(
+        @"^[A-Za-z0-9_.-]{1,64}$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     public SeasonConfigurationCli(
-        ISeasonRevisionStore store,
+        ISeasonRevisionStore? store,
         ILambdaInvoker? lambdaInvoker = null,
         IScheduler? scheduler = null,
-        string? activationFunctionName = null,
-        string? schedulerRoleArn = null,
-        string? schedulerGroupName = null)
+        SeasonConfigurationCliOptions? options = null)
     {
         _store = store;
         _lambdaInvoker = lambdaInvoker;
         _scheduler = scheduler;
-        _activationFunctionName = activationFunctionName;
-        _schedulerRoleArn = schedulerRoleArn;
-        _schedulerGroupName = schedulerGroupName;
+        _options = options ?? new SeasonConfigurationCliOptions();
     }
 
-    public async Task<int> ValidateAsync(string sourceFilePath, CancellationToken cancellationToken = default)
+    public async Task<int> ValidateAsync(
+        string sourceFilePath,
+        CancellationToken cancellationToken = default)
     {
-        SeasonConfiguration configuration = await LoadConfigurationAsync(sourceFilePath, cancellationToken);
+        SeasonConfiguration? configuration = await _loadConfigurationAsync(
+            sourceFilePath,
+            cancellationToken);
+        if (configuration == null)
+            return 1;
+
         try
         {
             SeasonConfigurationValidator.ValidateOrThrow(configuration);
@@ -57,9 +65,9 @@ public sealed class SeasonConfigurationCli
             Console.WriteLine($"Valid configuration '{configuration.Id}'. Revision hash: {hash}");
             return 0;
         }
-        catch (SeasonConfigurationValidationException ex)
+        catch (SeasonConfigurationValidationException exception)
         {
-            PrintErrors("Validation failed", ex.Errors);
+            _printErrors("Validation failed", exception.Errors);
             return 1;
         }
     }
@@ -70,28 +78,39 @@ public sealed class SeasonConfigurationCli
         string revisionId,
         CancellationToken cancellationToken = default)
     {
-        SeasonConfiguration configuration = await LoadConfigurationAsync(sourceFilePath, cancellationToken);
+        SeasonConfiguration? configuration = await _loadConfigurationAsync(
+            sourceFilePath,
+            cancellationToken);
+        if (configuration == null)
+            return 1;
+
+        if (_store == null)
+        {
+            Console.Error.WriteLine("AWS-backed configuration storage is not configured.");
+            return 1;
+        }
+
         try
         {
             SeasonConfigurationValidator.ValidateOrThrow(configuration);
         }
-        catch (SeasonConfigurationValidationException ex)
+        catch (SeasonConfigurationValidationException exception)
         {
-            PrintErrors("Validation failed", ex.Errors);
+            _printErrors("Validation failed", exception.Errors);
             return 1;
         }
 
-        if (configuration.Id != seasonId)
+        if (!string.Equals(configuration.Id, seasonId, StringComparison.Ordinal))
         {
             Console.Error.WriteLine(
                 $"Season ID mismatch: source configuration has ID '{configuration.Id}' but argument is '{seasonId}'.");
             return 1;
         }
 
-        if (!_revisionIdPattern.IsMatch(revisionId))
+        if (!_isValidRevisionId(seasonId, revisionId))
         {
             Console.Error.WriteLine(
-                $"Revision ID '{revisionId}' does not match required pattern (e.g., '{seasonId}-r1').");
+                $"Revision ID '{revisionId}' must match the season ID and use the form '{seasonId}-r1'.");
             return 1;
         }
 
@@ -99,25 +118,30 @@ public sealed class SeasonConfigurationCli
         try
         {
             await _store.SaveRevision(revision, cancellationToken);
-            Console.WriteLine($"Published revision '{revisionId}' for season '{seasonId}' with hash {revision.RevisionHash}");
+            Console.WriteLine(
+                $"Published revision '{revisionId}' for season '{seasonId}' with hash {revision.RevisionHash}");
             return 0;
         }
-        catch (AmazonS3Exception ex) when (ex.StatusCode == HttpStatusCode.PreconditionFailed)
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.PreconditionFailed)
         {
-            SeasonRevision? existing = await _store.GetRevision(seasonId, revisionId, cancellationToken);
+            SeasonRevision? existing = await _store.GetRevision(
+                seasonId,
+                revisionId,
+                cancellationToken);
             if (existing != null && existing.RevisionHash == revision.RevisionHash)
             {
                 Console.WriteLine(
                     $"Revision '{revisionId}' for season '{seasonId}' is already published with the same content.");
                 return 0;
             }
+
             Console.Error.WriteLine(
                 $"Revision '{revisionId}' already exists with different content. Publish rejected (immutable).");
             return 1;
         }
-        catch (SeasonConfigurationValidationException ex)
+        catch (SeasonConfigurationValidationException exception)
         {
-            PrintErrors("Publish failed", ex.Errors);
+            _printErrors("Publish failed", exception.Errors);
             return 1;
         }
     }
@@ -128,25 +152,29 @@ public sealed class SeasonConfigurationCli
         DateTimeOffset? activationAt,
         CancellationToken cancellationToken = default)
     {
-        SeasonRevision? revision = await GetRevisionAsync(seasonId, revisionId, cancellationToken);
+        if (!_hasActivationLambda())
+            return 1;
+
+        if (_store == null)
+        {
+            Console.Error.WriteLine("AWS-backed configuration storage is not configured.");
+            return 1;
+        }
+
+        if (_isFuture(activationAt))
+        {
+            Console.Error.WriteLine("Use 'schedule' for future activations, not 'activate'.");
+            return 1;
+        }
+
+        SeasonRevision? revision = await _getRevisionAsync(
+            seasonId,
+            revisionId,
+            cancellationToken);
         if (revision == null)
         {
             Console.Error.WriteLine(
                 $"Revision '{revisionId}' for season '{seasonId}' is not available.");
-            return 1;
-        }
-
-        if (activationAt.HasValue && activationAt.Value > DateTimeOffset.UtcNow)
-        {
-            Console.Error.WriteLine(
-                "Use 'schedule' for future activations, not 'activate'.");
-            return 1;
-        }
-
-        if (_lambdaInvoker == null || string.IsNullOrEmpty(_activationFunctionName))
-        {
-            Console.Error.WriteLine(
-                "Activation Lambda is not configured. Cannot perform activation in production mode.");
             return 1;
         }
 
@@ -155,19 +183,23 @@ public sealed class SeasonConfigurationCli
             Operation = "activate",
             SeasonId = seasonId,
             RevisionId = revisionId,
-            RevisionHash = revision.RevisionHash
+            RevisionHash = revision.RevisionHash,
+            ActivationAt = _toUtc(activationAt)
         };
+
         try
         {
-            SeasonActivationResponse response = await _lambdaInvoker.InvokeAsync(
-                _activationFunctionName, request, cancellationToken);
+            SeasonActivationResponse response = await _lambdaInvoker!.InvokeAsync(
+                _options.ActivationFunctionName!,
+                request,
+                cancellationToken);
             Console.WriteLine(
                 $"Activated revision '{revisionId}' for season '{seasonId}' at {response.ActivatedAt}");
             return 0;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Console.Error.WriteLine($"Activation request failed: {ex.Message}");
+            Console.Error.WriteLine($"Activation request failed: {exception.Message}");
             return 1;
         }
     }
@@ -178,13 +210,26 @@ public sealed class SeasonConfigurationCli
         DateTimeOffset activationAt,
         CancellationToken cancellationToken = default)
     {
-        if (activationAt <= DateTimeOffset.UtcNow)
+        if (!_hasSchedulerConfiguration())
+            return 1;
+
+        DateTimeOffset activationAtUtc = activationAt.ToUniversalTime();
+        if (activationAtUtc <= DateTimeOffset.UtcNow)
         {
             Console.Error.WriteLine("Scheduled activation must be in the future.");
             return 1;
         }
 
-        SeasonRevision? revision = await GetRevisionAsync(seasonId, revisionId, cancellationToken);
+        if (_store == null)
+        {
+            Console.Error.WriteLine("AWS-backed configuration storage is not configured.");
+            return 1;
+        }
+
+        SeasonRevision? revision = await _getRevisionAsync(
+            seasonId,
+            revisionId,
+            cancellationToken);
         if (revision == null)
         {
             Console.Error.WriteLine(
@@ -192,41 +237,67 @@ public sealed class SeasonConfigurationCli
             return 1;
         }
 
-        try
+        string? scheduleName = _tryGetScheduleName(seasonId, revisionId);
+        if (scheduleName == null)
+            return 1;
+
+        SeasonSchedule? pending = await _store.GetScheduled(cancellationToken);
+        string? pendingScheduleName = pending == null
+            ? null
+            : _tryGetScheduleName(pending.SeasonId, pending.RevisionId);
+        if (pending != null && pendingScheduleName == null)
         {
-            await _store.Schedule(seasonId, revisionId, activationAt, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Schedule S3 write failed: {ex.Message}");
+            Console.Error.WriteLine("The existing pending schedule has an invalid identity and cannot be replaced safely.");
             return 1;
         }
 
-        if (_scheduler != null && !string.IsNullOrEmpty(_schedulerGroupName))
+        if (pendingScheduleName != null && !string.Equals(
+                pendingScheduleName,
+                scheduleName,
+                StringComparison.Ordinal))
         {
-            string scheduleName = $"{seasonId}-{revisionId}";
-            try
-            {
-                await _scheduler.CreateScheduleAsync(
-                    _schedulerGroupName,
-                    scheduleName,
-                    activationAt,
-                    string.Empty,
-                    _schedulerRoleArn ?? string.Empty,
-                    cancellationToken);
-                Console.WriteLine(
-                    $"Scheduled activation of revision '{revisionId}' for season '{seasonId}' at {activationAt}");
-                return 0;
-            }
-            catch (Exception ex)
-            {
-                Console.Error.WriteLine($"Scheduler creation failed: {ex.Message}");
-                return 1;
-            }
+            Console.Error.WriteLine(
+                $"A different pending schedule already exists ({pendingScheduleName}). Cancel it before scheduling another revision.");
+            return 1;
+        }
+
+        SchedulerScheduleRequest scheduleRequest = _createScheduleRequest(
+            scheduleName,
+            seasonId,
+            revisionId,
+            revision.RevisionHash,
+            activationAtUtc);
+
+        try
+        {
+            await _scheduler!.CreateOrUpdateScheduleAsync(scheduleRequest, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Scheduler creation failed: {exception.Message}");
+            return 1;
+        }
+
+        try
+        {
+            await _store.Schedule(
+                seasonId,
+                revisionId,
+                activationAtUtc,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            await _compensateScheduleFailureAsync(
+                pending,
+                scheduleName,
+                cancellationToken);
+            Console.Error.WriteLine($"Schedule state write failed: {exception.Message}");
+            return 1;
         }
 
         Console.WriteLine(
-            $"Scheduled activation of revision '{revisionId}' for season '{seasonId}' at {activationAt}");
+            $"Scheduled activation of revision '{revisionId}' for season '{seasonId}' at {activationAtUtc:O}");
         return 0;
     }
 
@@ -236,18 +307,29 @@ public sealed class SeasonConfigurationCli
         DateTimeOffset? activationAt,
         CancellationToken cancellationToken = default)
     {
-        SeasonRevision? revision = await GetRevisionAsync(seasonId, revisionId, cancellationToken);
+        if (!_hasActivationLambda())
+            return 1;
+
+        if (_store == null)
+        {
+            Console.Error.WriteLine("AWS-backed configuration storage is not configured.");
+            return 1;
+        }
+
+        if (_isFuture(activationAt))
+        {
+            Console.Error.WriteLine("Future rollback timestamps are not supported; use a validated prior revision with 'rollback' immediately.");
+            return 1;
+        }
+
+        SeasonRevision? revision = await _getRevisionAsync(
+            seasonId,
+            revisionId,
+            cancellationToken);
         if (revision == null)
         {
             Console.Error.WriteLine(
                 $"Revision '{revisionId}' for season '{seasonId}' is not available.");
-            return 1;
-        }
-
-        if (_lambdaInvoker == null || string.IsNullOrEmpty(_activationFunctionName))
-        {
-            Console.Error.WriteLine(
-                "Activation Lambda is not configured. Cannot perform rollback in production mode.");
             return 1;
         }
 
@@ -257,89 +339,259 @@ public sealed class SeasonConfigurationCli
             SeasonId = seasonId,
             RevisionId = revisionId,
             RevisionHash = revision.RevisionHash,
-            ActivationAt = activationAt
+            ActivationAt = _toUtc(activationAt)
         };
+
         try
         {
-            SeasonActivationResponse response = await _lambdaInvoker.InvokeAsync(
-                _activationFunctionName, request, cancellationToken);
+            SeasonActivationResponse response = await _lambdaInvoker!.InvokeAsync(
+                _options.ActivationFunctionName!,
+                request,
+                cancellationToken);
             Console.WriteLine(
                 $"Rolled back to revision '{revisionId}' for season '{seasonId}' at {response.ActivatedAt}");
             return 0;
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Console.Error.WriteLine($"Rollback request failed: {ex.Message}");
+            Console.Error.WriteLine($"Rollback request failed: {exception.Message}");
             return 1;
         }
     }
 
     public async Task<int> CancelAsync(CancellationToken cancellationToken = default)
     {
+        if (!_hasSchedulerConfiguration())
+            return 1;
+
+        if (_store == null)
+        {
+            Console.Error.WriteLine("AWS-backed configuration storage is not configured.");
+            return 1;
+        }
+
+        SeasonSchedule? pending = await _store.GetScheduled(cancellationToken);
+        if (pending == null)
+        {
+            await _store.CancelSchedule(cancellationToken);
+            Console.WriteLine("Cancelled pending schedule.");
+            return 0;
+        }
+
+        string? scheduleName = _tryGetScheduleName(pending.SeasonId, pending.RevisionId);
+        if (scheduleName == null)
+            return 1;
+
+        try
+        {
+            await _scheduler!.DeleteScheduleAsync(
+                _options.SchedulerGroupName!,
+                scheduleName,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Scheduler deletion failed: {exception.Message}");
+            return 1;
+        }
+
         try
         {
             await _store.CancelSchedule(cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception exception)
         {
-            Console.Error.WriteLine($"Cancel S3 write failed: {ex.Message}");
+            Console.Error.WriteLine($"Cancel state write failed after scheduler deletion: {exception.Message}");
             return 1;
-        }
-
-        if (_scheduler != null && !string.IsNullOrEmpty(_schedulerGroupName))
-        {
-            SeasonRevision? active = await _store.GetActiveRevision(cancellationToken);
-            string scheduleName = active != null
-                ? $"{active.Configuration.Id}-{active.Id}"
-                : string.Empty;
-            if (!string.IsNullOrEmpty(scheduleName))
-            {
-                try
-                {
-                    await _scheduler.DeleteScheduleAsync(
-                        _schedulerGroupName,
-                        scheduleName,
-                        cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    Console.Error.WriteLine($"Scheduler deletion failed: {ex.Message}");
-                    return 1;
-                }
-            }
         }
 
         Console.WriteLine("Cancelled pending schedule.");
         return 0;
     }
 
-    private async Task<SeasonConfiguration> LoadConfigurationAsync(
-        string path,
+    private async Task _compensateScheduleFailureAsync(
+        SeasonSchedule? previousSchedule,
+        string scheduleName,
         CancellationToken cancellationToken)
     {
-        string json = await File.ReadAllTextAsync(path, cancellationToken);
-        SeasonConfiguration? configuration = JsonSerializer.Deserialize<SeasonConfiguration>(json, _jsonOptions);
-        if (configuration == null)
+        try
         {
-            throw new InvalidOperationException("Failed to deserialize season configuration.");
+            if (previousSchedule == null)
+            {
+                await _scheduler!.DeleteScheduleAsync(
+                    _options.SchedulerGroupName!,
+                    scheduleName,
+                    cancellationToken);
+                return;
+            }
+
+            string? previousScheduleName = _tryGetScheduleName(
+                previousSchedule.SeasonId,
+                previousSchedule.RevisionId);
+            if (previousScheduleName == null)
+                return;
+
+            SchedulerScheduleRequest previousRequest = _createScheduleRequest(
+                previousScheduleName,
+                previousSchedule.SeasonId,
+                previousSchedule.RevisionId,
+                previousSchedule.RevisionHash,
+                previousSchedule.ActivationAt.ToUniversalTime());
+            await _scheduler!.CreateOrUpdateScheduleAsync(previousRequest, cancellationToken);
         }
-        return configuration;
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Unable to restore scheduler state after a failed state write: {exception.Message}");
+        }
     }
 
-    private async Task<SeasonRevision?> GetRevisionAsync(
+    private SchedulerScheduleRequest _createScheduleRequest(
+        string scheduleName,
+        string seasonId,
+        string revisionId,
+        string revisionHash,
+        DateTimeOffset activationAt)
+    {
+        SeasonActivationRequest activationRequest = new()
+        {
+            Operation = "activate",
+            SeasonId = seasonId,
+            RevisionId = revisionId,
+            RevisionHash = revisionHash,
+            ActivationAt = activationAt.ToUniversalTime()
+        };
+
+        return new SchedulerScheduleRequest(
+            _options.SchedulerGroupName!,
+            scheduleName,
+            activationAt.ToUniversalTime(),
+            _options.ActivationFunctionArn!,
+            _options.SchedulerRoleArn!,
+            _options.SchedulerDeadLetterQueueArn!,
+            JsonSerializer.Serialize(activationRequest, _jsonOptions),
+            _SCHEDULER_MAXIMUM_EVENT_AGE_SECONDS,
+            _SCHEDULER_MAXIMUM_RETRY_ATTEMPTS);
+    }
+
+    private async Task<SeasonRevision?> _getRevisionAsync(
         string seasonId,
         string revisionId,
         CancellationToken cancellationToken)
     {
-        SeasonRevision? revision = await _store.GetRevision(seasonId, revisionId, cancellationToken);
-        if (revision == null || !string.Equals(revision.Configuration.Id, seasonId, StringComparison.Ordinal))
+        SeasonRevision? revision = await _store!.GetRevision(
+            seasonId,
+            revisionId,
+            cancellationToken);
+        if (revision == null || !string.Equals(
+                revision.Configuration.Id,
+                seasonId,
+                StringComparison.Ordinal))
         {
             return null;
         }
+
         return revision;
     }
 
-    private static void PrintErrors(string header, IReadOnlyList<string> errors)
+    private async Task<SeasonConfiguration?> _loadConfigurationAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            string json = await File.ReadAllTextAsync(path, cancellationToken);
+            SeasonConfiguration? configuration = JsonSerializer.Deserialize<SeasonConfiguration>(
+                json,
+                _jsonOptions);
+            if (configuration == null)
+            {
+                Console.Error.WriteLine($"Configuration file '{path}' does not contain a JSON object.");
+                return null;
+            }
+
+            return configuration;
+        }
+        catch (FileNotFoundException)
+        {
+            Console.Error.WriteLine($"Configuration file '{path}' was not found.");
+        }
+        catch (DirectoryNotFoundException)
+        {
+            Console.Error.WriteLine($"Configuration directory for '{path}' was not found.");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"Configuration file '{path}' could not be accessed.");
+        }
+        catch (IOException exception)
+        {
+            Console.Error.WriteLine($"Configuration file '{path}' could not be read: {exception.Message}");
+        }
+        catch (JsonException exception)
+        {
+            Console.Error.WriteLine($"Configuration file '{path}' contains invalid JSON: {exception.Message}");
+        }
+        catch (NotSupportedException exception)
+        {
+            Console.Error.WriteLine($"Configuration file '{path}' has an unsupported shape: {exception.Message}");
+        }
+
+        return null;
+    }
+
+    private bool _hasActivationLambda()
+    {
+        if (_lambdaInvoker != null && !string.IsNullOrWhiteSpace(_options.ActivationFunctionName))
+            return true;
+
+        Console.Error.WriteLine(
+            "Activation Lambda is not configured. Cannot perform activation or rollback in production mode.");
+        return false;
+    }
+
+    private bool _hasSchedulerConfiguration()
+    {
+        if (_scheduler != null &&
+            !string.IsNullOrWhiteSpace(_options.ActivationFunctionArn) &&
+            !string.IsNullOrWhiteSpace(_options.SchedulerRoleArn) &&
+            !string.IsNullOrWhiteSpace(_options.SchedulerGroupName) &&
+            !string.IsNullOrWhiteSpace(_options.SchedulerDeadLetterQueueArn))
+        {
+            return true;
+        }
+
+        Console.Error.WriteLine(
+            "Scheduler configuration is incomplete. Activation ARN, scheduler role ARN, scheduler group, dead-letter queue ARN, and AWS region are required.");
+        return false;
+    }
+
+    private static string? _tryGetScheduleName(string seasonId, string revisionId)
+    {
+        string scheduleName = $"{_SCHEDULE_NAME_PREFIX}{seasonId}-{revisionId}";
+        if (!_scheduleNamePattern.IsMatch(scheduleName) || scheduleName.Length > _MAX_SCHEDULE_NAME_LENGTH)
+        {
+            Console.Error.WriteLine(
+                $"Schedule name '{scheduleName}' is invalid or exceeds {_MAX_SCHEDULE_NAME_LENGTH} characters.");
+            return null;
+        }
+
+        return scheduleName;
+    }
+
+    private static bool _isValidRevisionId(string seasonId, string revisionId) =>
+        _seasonIdPattern.IsMatch(seasonId) &&
+        Regex.IsMatch(
+            revisionId,
+            $"^{Regex.Escape(seasonId)}-r[0-9]+$",
+            RegexOptions.CultureInvariant);
+
+    private static bool _isFuture(DateTimeOffset? activationAt) =>
+        activationAt.HasValue && activationAt.Value > DateTimeOffset.UtcNow;
+
+    private static DateTimeOffset? _toUtc(DateTimeOffset? value) =>
+        value?.ToUniversalTime();
+
+    private static void _printErrors(string header, IReadOnlyList<string> errors)
     {
         Console.Error.WriteLine(header);
         foreach (string error in errors)

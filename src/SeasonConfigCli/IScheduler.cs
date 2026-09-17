@@ -5,12 +5,8 @@ namespace SeasonConfigCli;
 
 public interface IScheduler
 {
-    Task CreateScheduleAsync(
-        string groupName,
-        string scheduleName,
-        DateTimeOffset activationAt,
-        string lambdaFunctionArn,
-        string roleArn,
+    Task CreateOrUpdateScheduleAsync(
+        SchedulerScheduleRequest request,
         CancellationToken cancellationToken = default);
 
     Task DeleteScheduleAsync(

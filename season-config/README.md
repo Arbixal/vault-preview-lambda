@@ -177,8 +177,10 @@ The CLI and GitHub Actions workflow should accept these inputs rather than embed
 | `AWS_REGION` | Region containing the S3 bucket, Lambda, and scheduler resources. |
 | `VAULT_PREVIEW_DATA_BUCKET` | Existing durable data bucket; the current deployment default is `vault-preview-data`. |
 | `VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME` | Dedicated Lambda invoked for immediate and scheduled activation. |
+| `VAULT_PREVIEW_ACTIVATION_FUNCTION_ARN` | CloudFormation `ActivationFunctionArn` output used as the EventBridge Scheduler target. |
 | `VAULT_PREVIEW_SCHEDULER_ROLE_ARN` | EventBridge Scheduler execution role allowed to invoke the activation Lambda. |
 | `VAULT_PREVIEW_SCHEDULER_GROUP` | Optional scheduler group used to isolate season schedules. |
+| `VAULT_PREVIEW_SCHEDULER_DEAD_LETTER_QUEUE_ARN` | CloudFormation `SchedulerDeadLetterQueueArn` output used for failed scheduled invocations. |
 | `VAULT_PREVIEW_CONFIG_ENVIRONMENT` | Logical environment name used by protected GitHub environments and workflow output. |
 | `AWS_ROLE_TO_ASSUME` | GitHub OIDC deployment role; no long-lived AWS credentials are stored in the repository. |
 
