@@ -66,6 +66,8 @@ Season-aware Delve baseline refreshes also require the active revision provider 
 - `VAULT_PREVIEW_SEASON_REVISION_HASH`
 - Optional `VAULT_PREVIEW_SOURCE_SEASON_ID`
 
+The GitHub Actions deployment requires repository variables with these names and passes them as SAM template parameters to both API Lambdas. Local deployments and `deploy.cmd` require the same environment variables. T08 will replace this bridge with the durable active-season configuration provider.
+
 The API and scheduled-function SAM templates create Lambda execution roles with access limited to the `/Blizzard/*` parameter path and the cache bucket. The token function is deployed directly and therefore needs a separately created execution role.
 
 ## AWS Setup
