@@ -1,4 +1,6 @@
-﻿namespace VaultPreview.VaultCache.Models;
+﻿using VaultShared.Seasons;
+
+namespace VaultPreview.VaultCache.Models;
 
 public class CharacterData
 {
@@ -8,6 +10,14 @@ public class CharacterData
     public string? Region { get; set; }
     
     public long LastUpdatedTimestamp { get; set; }
+
+    public string? SeasonId { get; set; }
+    public string? SeasonRevision { get; set; }
+    public string? SeasonRevisionHash { get; set; }
+
+    public bool HasSeasonAwareBaseline => !string.IsNullOrWhiteSpace(SeasonId) &&
+                                          !string.IsNullOrWhiteSpace(SeasonRevision) &&
+                                          !string.IsNullOrWhiteSpace(SeasonRevisionHash);
 
     public DateTimeOffset LastUpdated => DateTimeOffset.FromUnixTimeMilliseconds(LastUpdatedTimestamp);
 
@@ -65,16 +75,14 @@ public class CharacterData
 
     public void SetDelveData(Dictionary<int, int> data)
     {
-        DelvesCompleted[1] = data.GetValueOrDefault(1, 0);
-        DelvesCompleted[2] = data.GetValueOrDefault(2, 0);
-        DelvesCompleted[3] = data.GetValueOrDefault(3, 0);
-        DelvesCompleted[4] = data.GetValueOrDefault(4, 0);
-        DelvesCompleted[5] = data.GetValueOrDefault(5, 0);
-        DelvesCompleted[6] = data.GetValueOrDefault(6, 0);
-        DelvesCompleted[7] = data.GetValueOrDefault(7, 0);
-        DelvesCompleted[8] = data.GetValueOrDefault(8, 0);
-        DelvesCompleted[9] = data.GetValueOrDefault(9, 0);
-        DelvesCompleted[10] = data.GetValueOrDefault(10, 0);
-        DelvesCompleted[11] = data.GetValueOrDefault(11, 0);
+        DelvesCompleted = data.ToDictionary(x => x.Key, x => x.Value);
+    }
+
+    public void SetDelveBaseline(Dictionary<int, int> data, ActiveSeasonRevision revision)
+    {
+        SetDelveData(data);
+        SeasonId = revision.SeasonId;
+        SeasonRevision = revision.Revision;
+        SeasonRevisionHash = revision.RevisionHash;
     }
 }

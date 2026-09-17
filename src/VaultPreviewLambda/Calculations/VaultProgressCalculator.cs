@@ -6,18 +6,6 @@ using VaultShared.Seasons;
 
 namespace VaultPreviewLambda.Calculations;
 
-public interface ISeasonAwareDelveBaselineProvider
-{
-    Task<DelveBaseline?> GetBaseline(string region, string realm, string character);
-    Task SaveBaseline(string region, string realm, string character, DelveBaseline baseline);
-}
-
-public sealed record DelveBaseline(
-    string SeasonId,
-    string Revision,
-    string RevisionHash,
-    IReadOnlyDictionary<int, int> Completed);
-
 public sealed class VaultProgressCalculator
 {
     public async Task<VaultProgressResponse> Calculate(

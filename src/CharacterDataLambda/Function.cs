@@ -5,6 +5,7 @@ using Amazon.Lambda.Annotations;
 using VaultPreview.Blizzard;
 using VaultPreview.VaultCache;
 using VaultPreview.VaultCache.Models;
+using VaultShared.Seasons;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
@@ -15,14 +16,17 @@ public class Function
 {
     private readonly IBlizzardApiHandler _blizzardApiHandler;
     private readonly IVaultCacheHandler _vaultCacheHandler;
+    private readonly IActiveSeasonRevisionProvider _activeSeasonRevisionProvider;
 
     public Function(
         IBlizzardApiHandler blizzardApiHandler,
-        IVaultCacheHandler vaultCacheHandler
+        IVaultCacheHandler vaultCacheHandler,
+        IActiveSeasonRevisionProvider activeSeasonRevisionProvider
         )
     {
         _blizzardApiHandler = blizzardApiHandler;
         _vaultCacheHandler = vaultCacheHandler;
+        _activeSeasonRevisionProvider = activeSeasonRevisionProvider;
     }
     
     /// <summary>
@@ -37,6 +41,12 @@ public class Function
         IList<CharacterData> characterList = new List<CharacterData>();
         
         await _blizzardApiHandler.Connect();
+        ActiveSeasonRevision? activeSeason = await _activeSeasonRevisionProvider.GetActive();
+        if (activeSeason == null)
+        {
+            Console.WriteLine("No active season revision is configured; skipping baseline refresh.");
+            return "0k";
+        }
 
         if (string.IsNullOrEmpty(character))
         {
@@ -74,7 +84,7 @@ public class Function
                 continue;
             }
 
-            characterData.SetDelveData(response);
+            characterData.SetDelveBaseline(response, activeSeason);
 
             // Save to S3
             Console.WriteLine($"Saving Character '{characterData.FullName}'.");
