@@ -18,9 +18,9 @@ public class Startup
         services.AddSingleton<IBlizzardApiHandler, BlizzardApiHandler>();
         services.AddSingleton<BlizzardJournalMetadataProvider>();
         services.AddSingleton<VaultProgressCalculator>();
+        services.AddSingleton<VersionedProgressService>();
         services.AddSingleton<IRaiderIoHandler, RaiderIoHandler>();
         services.AddSingleton<ISecretHandler, SecretHandler>();
-        services.AddSingleton<IActiveSeasonRevisionProvider, EnvironmentActiveSeasonRevisionProvider>();
         services.AddSingleton<IVaultCacheHandler, VaultCacheHandler>();
         services.AddVaultCache();
         services.AddHttpClient();

@@ -229,6 +229,19 @@ public sealed class VaultProgressCalculator
                 0,
                 statistics.GetValueOrDefault(level) -
                 (baselineMatches ? baseline!.Completed.GetValueOrDefault(level) : statistics.GetValueOrDefault(level))));
+        if (!baselineMatches)
+        {
+            await baselineProvider.SaveBaseline(
+                region,
+                realm,
+                character,
+                new DelveBaseline(
+                    revision.Configuration.Id,
+                    revision.Id,
+                    revision.RevisionHash,
+                    statistics.ToDictionary(entry => entry.Key, entry => entry.Value)));
+        }
+
         int totalCompleted = completedByLevel.Values.Sum();
         IList<ProgressItem> items = completedByLevel
             .Where(x => x.Value > 0)

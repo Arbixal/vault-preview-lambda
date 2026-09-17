@@ -3,22 +3,10 @@
   "Transform": "AWS::Serverless-2016-10-31",
   "Description": "This template is partially managed by Amazon.Lambda.Annotations (v2.4.0.0).",
   "Parameters": {
-    "VaultPreviewSeasonId": {
+    "VaultPreviewCorsOrigins": {
       "Type": "String",
-      "Description": "Global active Vault Preview season ID."
-    },
-    "VaultPreviewSeasonRevision": {
-      "Type": "String",
-      "Description": "Immutable active season revision ID."
-    },
-    "VaultPreviewSeasonRevisionHash": {
-      "Type": "String",
-      "Description": "SHA-256 hash of the active season revision."
-    },
-    "VaultPreviewSourceSeasonId": {
-      "Type": "String",
-      "Default": "",
-      "Description": "Optional upstream source season ID."
+      "Default": "https://vault-preview.bixnpieces.com,http://localhost:3000",
+      "Description": "Comma-separated origins allowed to call the versioned API."
     }
   },
   "Resources": {
@@ -43,17 +31,8 @@
         "Timeout": 30,
         "Environment": {
           "Variables": {
-            "VAULT_PREVIEW_SEASON_ID": {
-              "Ref": "VaultPreviewSeasonId"
-            },
-            "VAULT_PREVIEW_SEASON_REVISION": {
-              "Ref": "VaultPreviewSeasonRevision"
-            },
-            "VAULT_PREVIEW_SEASON_REVISION_HASH": {
-              "Ref": "VaultPreviewSeasonRevisionHash"
-            },
-            "VAULT_PREVIEW_SOURCE_SEASON_ID": {
-              "Ref": "VaultPreviewSourceSeasonId"
+            "VAULT_PREVIEW_CORS_ORIGINS": {
+              "Ref": "VaultPreviewCorsOrigins"
             }
           }
         },
@@ -89,6 +68,208 @@
             "Properties": {
               "Path": "/vault-progress/{region}/{realm}/{character}",
               "Method": "GET"
+            }
+          }
+        }
+      }
+    },
+    "VaultPreviewLambdaFunctionGetAppConfigGenerated": {
+      "Type": "AWS::Serverless::Function",
+      "Metadata": {
+        "Tool": "Amazon.Lambda.Annotations",
+        "SyncedEvents": [
+          "RootGet"
+        ],
+        "SyncedEventProperties": {
+          "RootGet": [
+            "Path",
+            "Method"
+          ]
+        }
+      },
+      "Properties": {
+        "Runtime": "dotnet10",
+        "CodeUri": ".",
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "VAULT_PREVIEW_CORS_ORIGINS": {
+              "Ref": "VaultPreviewCorsOrigins"
+            }
+          }
+        },
+        "Policies": [
+          "AWSLambdaBasicExecutionRole",
+          {
+            "Statement": {
+              "Sid": "S3SeasonConfigurationReadStatement",
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject"
+              ],
+              "Resource": "arn:aws:s3:::vault-preview-data/*"
+            }
+          }
+        ],
+        "PackageType": "Zip",
+        "Handler": "VaultPreviewLambda::VaultPreviewLambda.Function_GetAppConfig_Generated::GetAppConfig",
+        "Events": {
+          "RootGet": {
+            "Type": "HttpApi",
+            "Properties": {
+              "Path": "/v1/app-config",
+              "Method": "GET"
+            }
+          }
+        }
+      }
+    },
+    "VaultPreviewLambdaFunctionGetVaultProgressGenerated": {
+      "Type": "AWS::Serverless::Function",
+      "Metadata": {
+        "Tool": "Amazon.Lambda.Annotations",
+        "SyncedEvents": [
+          "RootGet"
+        ],
+        "SyncedEventProperties": {
+          "RootGet": [
+            "Path",
+            "Method"
+          ]
+        }
+      },
+      "Properties": {
+        "Runtime": "dotnet10",
+        "CodeUri": ".",
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "VAULT_PREVIEW_CORS_ORIGINS": {
+              "Ref": "VaultPreviewCorsOrigins"
+            }
+          }
+        },
+        "Policies": [
+          "AWSLambdaBasicExecutionRole",
+          {
+            "Statement": {
+              "Sid": "ParameterStoreAccessStatement",
+              "Effect": "Allow",
+              "Action": [
+                "ssm:GetParameter",
+                "ssm:PutParameter"
+              ],
+              "Resource": {
+                "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/Blizzard/*"
+              }
+            }
+          },
+          {
+            "Statement": {
+              "Sid": "S3AccessStatement",
+              "Effect": "Allow",
+              "Action": [
+                "s3:GetObject",
+                "s3:PutObject"
+              ],
+              "Resource": "arn:aws:s3:::vault-preview-data/*"
+            }
+          }
+        ],
+        "PackageType": "Zip",
+        "Handler": "VaultPreviewLambda::VaultPreviewLambda.Function_GetVaultProgress_Generated::GetVaultProgress",
+        "Events": {
+          "RootGet": {
+            "Type": "HttpApi",
+            "Properties": {
+              "Path": "/v1/vault-progress/{region}/{realm}/{character}",
+              "Method": "GET"
+            }
+          }
+        }
+      }
+    },
+    "VaultPreviewLambdaFunctionGetAppConfigOptionsGenerated": {
+      "Type": "AWS::Serverless::Function",
+      "Metadata": {
+        "Tool": "Amazon.Lambda.Annotations",
+        "SyncedEvents": [
+          "RootOptions"
+        ],
+        "SyncedEventProperties": {
+          "RootOptions": [
+            "Path",
+            "Method"
+          ]
+        }
+      },
+      "Properties": {
+        "Runtime": "dotnet10",
+        "CodeUri": ".",
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "VAULT_PREVIEW_CORS_ORIGINS": {
+              "Ref": "VaultPreviewCorsOrigins"
+            }
+          }
+        },
+        "Policies": [
+          "AWSLambdaBasicExecutionRole"
+        ],
+        "PackageType": "Zip",
+        "Handler": "VaultPreviewLambda::VaultPreviewLambda.Function_GetAppConfigOptions_Generated::GetAppConfigOptions",
+        "Events": {
+          "RootOptions": {
+            "Type": "HttpApi",
+            "Properties": {
+              "Path": "/v1/app-config",
+              "Method": "OPTIONS"
+            }
+          }
+        }
+      }
+    },
+    "VaultPreviewLambdaFunctionGetVaultProgressOptionsGenerated": {
+      "Type": "AWS::Serverless::Function",
+      "Metadata": {
+        "Tool": "Amazon.Lambda.Annotations",
+        "SyncedEvents": [
+          "RootOptions"
+        ],
+        "SyncedEventProperties": {
+          "RootOptions": [
+            "Path",
+            "Method"
+          ]
+        }
+      },
+      "Properties": {
+        "Runtime": "dotnet10",
+        "CodeUri": ".",
+        "MemorySize": 512,
+        "Timeout": 30,
+        "Environment": {
+          "Variables": {
+            "VAULT_PREVIEW_CORS_ORIGINS": {
+              "Ref": "VaultPreviewCorsOrigins"
+            }
+          }
+        },
+        "Policies": [
+          "AWSLambdaBasicExecutionRole"
+        ],
+        "PackageType": "Zip",
+        "Handler": "VaultPreviewLambda::VaultPreviewLambda.Function_GetVaultProgressOptions_Generated::GetVaultProgressOptions",
+        "Events": {
+          "RootOptions": {
+            "Type": "HttpApi",
+            "Properties": {
+              "Path": "/v1/vault-progress/{region}/{realm}/{character}",
+              "Method": "OPTIONS"
             }
           }
         }

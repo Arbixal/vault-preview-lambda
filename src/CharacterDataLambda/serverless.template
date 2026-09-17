@@ -2,25 +2,6 @@
   "AWSTemplateFormatVersion": "2010-09-09",
   "Transform": "AWS::Serverless-2016-10-31",
   "Description": "This template is partially managed by Amazon.Lambda.Annotations (v2.4.0.0).",
-  "Parameters": {
-    "VaultPreviewSeasonId": {
-      "Type": "String",
-      "Description": "Global active Vault Preview season ID."
-    },
-    "VaultPreviewSeasonRevision": {
-      "Type": "String",
-      "Description": "Immutable active season revision ID."
-    },
-    "VaultPreviewSeasonRevisionHash": {
-      "Type": "String",
-      "Description": "SHA-256 hash of the active season revision."
-    },
-    "VaultPreviewSourceSeasonId": {
-      "Type": "String",
-      "Default": "",
-      "Description": "Optional upstream source season ID."
-    }
-  },
   "Resources": {
     "CharacterDataLambdaFunctionFunctionHandlerGenerated": {
       "Type": "AWS::Serverless::Function",
@@ -32,22 +13,6 @@
         "CodeUri": ".",
         "MemorySize": 256,
         "Timeout": 30,
-        "Environment": {
-          "Variables": {
-            "VAULT_PREVIEW_SEASON_ID": {
-              "Ref": "VaultPreviewSeasonId"
-            },
-            "VAULT_PREVIEW_SEASON_REVISION": {
-              "Ref": "VaultPreviewSeasonRevision"
-            },
-            "VAULT_PREVIEW_SEASON_REVISION_HASH": {
-              "Ref": "VaultPreviewSeasonRevisionHash"
-            },
-            "VAULT_PREVIEW_SOURCE_SEASON_ID": {
-              "Ref": "VaultPreviewSourceSeasonId"
-            }
-          }
-        },
         "Policies": [
           "AWSLambdaBasicExecutionRole",
           {
