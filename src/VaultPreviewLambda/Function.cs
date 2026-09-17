@@ -1,3 +1,6 @@
+using System.Net;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Amazon.Lambda.Annotations;
 using Amazon.Lambda.Annotations.APIGateway;
 using Amazon.Lambda.Core;
@@ -21,19 +24,194 @@ public class Function
     private readonly IRaiderIoHandler _raiderIoHandler;
     private readonly IVaultCacheHandler _vaultCacheHandler;
     private readonly IActiveSeasonRevisionProvider _activeSeasonRevisionProvider;
+    private readonly ISeasonRevisionProvider? _seasonRevisionProvider;
+    private readonly VersionedProgressService? _versionedProgressService;
+
+    private const string _CONFIG_CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=300";
+    private const string _PROGRESS_CACHE_CONTROL = "public, max-age=30, stale-while-revalidate=60";
 
     public Function(
         IBlizzardApiHandler blizzardApiHandler,
         IRaiderIoHandler raiderIoHandler,
         IVaultCacheHandler vaultCacheHandler,
-        IActiveSeasonRevisionProvider activeSeasonRevisionProvider
+        IActiveSeasonRevisionProvider activeSeasonRevisionProvider,
+        ISeasonRevisionProvider? seasonRevisionProvider = null,
+        VersionedProgressService? versionedProgressService = null
         )
     {
         _blizzardApiHandler = blizzardApiHandler;
         _raiderIoHandler = raiderIoHandler;
         _vaultCacheHandler = vaultCacheHandler;
         _activeSeasonRevisionProvider = activeSeasonRevisionProvider;
+        _seasonRevisionProvider = seasonRevisionProvider;
+        _versionedProgressService = versionedProgressService;
     }
+
+    [LambdaFunction]
+    [HttpApi(LambdaHttpMethod.Get, "/v1/app-config")]
+    public async Task<IHttpResult> GetAppConfig(
+        [FromHeader(Name = "If-None-Match")] string ifNoneMatch,
+        [FromHeader(Name = "Origin")] string origin)
+    {
+        if (_seasonRevisionProvider == null)
+        {
+            return _createError(
+                HttpStatusCode.ServiceUnavailable,
+                "ACTIVE_CONFIGURATION_UNAVAILABLE",
+                "Active application configuration is unavailable.",
+                origin);
+        }
+
+        try
+        {
+            SeasonRevision? revision = await _seasonRevisionProvider.GetActiveRevision();
+            if (revision == null)
+            {
+                return _createError(
+                    HttpStatusCode.ServiceUnavailable,
+                    "ACTIVE_CONFIGURATION_UNAVAILABLE",
+                    "Active application configuration is unavailable.",
+                    origin);
+            }
+
+            string entityTag = _getRevisionEntityTag(revision);
+            if (_matchesEntityTag(ifNoneMatch, entityTag))
+            {
+                return _withHeaders(
+                    HttpResults.NewResult(HttpStatusCode.NotModified, null),
+                    origin,
+                    _CONFIG_CACHE_CONTROL,
+                    entityTag);
+            }
+
+            AppConfigResponse response = new()
+            {
+                ActiveSeason = _toSeasonSnapshot(revision)
+            };
+            return _withHeaders(
+                HttpResults.Ok(response),
+                origin,
+                _CONFIG_CACHE_CONTROL,
+                entityTag);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"Unable to serve active application configuration: {exception.GetType().Name}");
+            return _createError(
+                HttpStatusCode.ServiceUnavailable,
+                "ACTIVE_CONFIGURATION_UNAVAILABLE",
+                "Active application configuration is unavailable.",
+                origin);
+        }
+    }
+
+    [LambdaFunction]
+    [HttpApi(LambdaHttpMethod.Get, "/v1/vault-progress/{region}/{realm}/{character}")]
+    public async Task<IHttpResult> GetVaultProgress(
+        string region,
+        string realm,
+        string character,
+        [FromHeader(Name = "If-None-Match")] string ifNoneMatch,
+        [FromHeader(Name = "Origin")] string origin)
+    {
+        if (!_isValidRequest(region, realm, character))
+        {
+            return _createError(
+                HttpStatusCode.BadRequest,
+                "INVALID_REQUEST",
+                "The request is invalid.",
+                origin);
+        }
+
+        if (_versionedProgressService == null)
+        {
+            return _createError(
+                HttpStatusCode.ServiceUnavailable,
+                "ACTIVE_CONFIGURATION_UNAVAILABLE",
+                "Active application configuration is unavailable.",
+                origin);
+        }
+
+        try
+        {
+            VaultProgressResponse? response = await _versionedProgressService.Calculate(
+                region.Trim().ToLowerInvariant(),
+                realm.Trim(),
+                character.Trim());
+            if (response == null)
+            {
+                return _createError(
+                    HttpStatusCode.ServiceUnavailable,
+                    "ACTIVE_CONFIGURATION_UNAVAILABLE",
+                    "Active application configuration is unavailable.",
+                    origin);
+            }
+
+            string entityTag = _getResponseEntityTag(response);
+            if (_matchesEntityTag(ifNoneMatch, entityTag))
+            {
+                return _withHeaders(
+                    HttpResults.NewResult(HttpStatusCode.NotModified, null),
+                    origin,
+                    _PROGRESS_CACHE_CONTROL,
+                    entityTag);
+            }
+
+            return _withHeaders(
+                HttpResults.Ok(response),
+                origin,
+                _PROGRESS_CACHE_CONTROL,
+                entityTag);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            return _createError(
+                HttpStatusCode.NotFound,
+                "CHARACTER_NOT_FOUND",
+                "Character data is not available.",
+                origin);
+        }
+        catch (HttpRequestException exception)
+        {
+            Console.WriteLine($"Character progress upstream request failed: {exception.GetType().Name}");
+            return _createError(
+                HttpStatusCode.ServiceUnavailable,
+                "UPSTREAM_UNAVAILABLE",
+                "Required upstream data is unavailable.",
+                origin);
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"Character progress calculation failed: {exception.GetType().Name}");
+            return _createError(
+                HttpStatusCode.ServiceUnavailable,
+                "UPSTREAM_UNAVAILABLE",
+                "Required upstream data is unavailable.",
+                origin);
+        }
+    }
+
+    [LambdaFunction]
+    [HttpApi(LambdaHttpMethod.Options, "/v1/app-config")]
+    public IHttpResult GetAppConfigOptions([FromHeader(Name = "Origin")] string origin) =>
+        _withHeaders(HttpResults.Ok(null), origin, "no-store", null);
+
+    [LambdaFunction]
+    [HttpApi(LambdaHttpMethod.Options, "/v1/vault-progress/{region}/{realm}/{character}")]
+    public IHttpResult GetVaultProgressOptions(
+        string region,
+        string realm,
+        string character,
+        [FromHeader(Name = "Origin")] string origin) =>
+        _withHeaders(HttpResults.Ok(null), origin, "no-store", null);
     
     /// <summary>
     /// A simple function that takes a string and does a ToUpper
@@ -227,6 +405,92 @@ public class Function
             lastTuesday = lastTuesday.AddDays(-1);
 
         return new DateTimeOffset(lastTuesday.Year, lastTuesday.Month, lastTuesday.Day, 15, 0, 0, TimeSpan.Zero);
+    }
+
+    private static bool _isValidRequest(string region, string realm, string character)
+    {
+        return region.Trim().Length == 2 &&
+               region.Trim().All(char.IsLetter) &&
+               !string.IsNullOrWhiteSpace(realm) &&
+               !string.IsNullOrWhiteSpace(character);
+    }
+
+    private static SeasonSnapshot _toSeasonSnapshot(SeasonRevision revision)
+    {
+        return new SeasonSnapshot
+        {
+            Id = revision.Configuration.Id,
+            DisplayName = revision.Configuration.DisplayName,
+            ShortLabel = revision.Configuration.ShortLabel,
+            Expansion = revision.Configuration.Expansion,
+            SourceSeasonId = revision.Configuration.SourceSeasonId,
+            Revision = revision.Id,
+            RevisionHash = revision.RevisionHash
+        };
+    }
+
+    private static IHttpResult _createError(
+        HttpStatusCode statusCode,
+        string code,
+        string message,
+        string? origin)
+    {
+        return _withHeaders(
+            HttpResults.NewResult(
+                statusCode,
+                new ApiErrorResponse
+                {
+                    Error = new ApiError { Code = code, Message = message }
+                }),
+            origin,
+            "no-store",
+            null);
+    }
+
+    private static IHttpResult _withHeaders(
+        IHttpResult result,
+        string? origin,
+        string cacheControl,
+        string? entityTag)
+    {
+        result.AddHeader("Cache-Control", cacheControl)
+            .AddHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
+            .AddHeader("Access-Control-Allow-Headers", "If-None-Match, Content-Type")
+            .AddHeader("Vary", "Origin");
+
+        string? allowedOrigin = CorsPolicy.GetAllowedOrigin(origin);
+        if (allowedOrigin != null)
+            result.AddHeader("Access-Control-Allow-Origin", allowedOrigin);
+        if (entityTag != null)
+            result.AddHeader("ETag", entityTag);
+
+        return result;
+    }
+
+    private static string _getRevisionEntityTag(SeasonRevision revision) =>
+        $"\"{revision.RevisionHash}\"";
+
+    private static string _getResponseEntityTag(VaultProgressResponse response)
+    {
+        byte[] serialized = JsonSerializer.SerializeToUtf8Bytes(response);
+        byte[] hash = SHA256.HashData(serialized);
+        return $"\"sha256:{Convert.ToHexString(hash).ToLowerInvariant()}\"";
+    }
+
+    private static bool _matchesEntityTag(string? ifNoneMatch, string entityTag)
+    {
+        if (string.IsNullOrWhiteSpace(ifNoneMatch))
+            return false;
+        if (ifNoneMatch.Trim() == "*")
+            return true;
+
+        string normalizedEntityTag = entityTag.Trim();
+        return ifNoneMatch
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => value.StartsWith("W/", StringComparison.OrdinalIgnoreCase)
+                ? value[2..].Trim()
+                : value)
+            .Any(value => string.Equals(value, normalizedEntityTag, StringComparison.Ordinal));
     }
     
     

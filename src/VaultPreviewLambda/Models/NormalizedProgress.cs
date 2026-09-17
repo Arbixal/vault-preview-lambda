@@ -25,7 +25,9 @@ public sealed class SeasonSnapshot
     [JsonPropertyName("displayName")] public string DisplayName { get; init; } = string.Empty;
     [JsonPropertyName("shortLabel")] public string ShortLabel { get; init; } = string.Empty;
     [JsonPropertyName("expansion")] public string Expansion { get; init; } = string.Empty;
-    [JsonPropertyName("sourceSeasonId")] public int? SourceSeasonId { get; init; }
+    [JsonPropertyName("sourceSeasonId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? SourceSeasonId { get; init; }
     [JsonPropertyName("revision")] public string Revision { get; init; } = string.Empty;
     [JsonPropertyName("revisionHash")] public string RevisionHash { get; init; } = string.Empty;
 }

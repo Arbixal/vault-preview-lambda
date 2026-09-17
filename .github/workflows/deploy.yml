@@ -18,10 +18,6 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   LAMBDA_BUILD_BUCKET: ${{ vars.LAMBDA_BUILD_BUCKET }}
   BLIZZARD_TOKEN_ROLE_ARN: ${{ vars.BLIZZARD_TOKEN_ROLE_ARN }}
-  VAULT_PREVIEW_SEASON_ID: ${{ vars.VAULT_PREVIEW_SEASON_ID }}
-  VAULT_PREVIEW_SEASON_REVISION: ${{ vars.VAULT_PREVIEW_SEASON_REVISION }}
-  VAULT_PREVIEW_SEASON_REVISION_HASH: ${{ vars.VAULT_PREVIEW_SEASON_REVISION_HASH }}
-  VAULT_PREVIEW_SOURCE_SEASON_ID: ${{ vars.VAULT_PREVIEW_SOURCE_SEASON_ID }}
 
 jobs:
   deploy:
@@ -45,9 +41,6 @@ jobs:
           test -n "$AWS_REGION" || { echo "AWS_REGION is not configured"; exit 1; }
           test -n "$LAMBDA_BUILD_BUCKET" || { echo "LAMBDA_BUILD_BUCKET is not configured"; exit 1; }
           test -n "$BLIZZARD_TOKEN_ROLE_ARN" || { echo "BLIZZARD_TOKEN_ROLE_ARN is not configured"; exit 1; }
-          test -n "$VAULT_PREVIEW_SEASON_ID" || { echo "VAULT_PREVIEW_SEASON_ID is not configured"; exit 1; }
-          test -n "$VAULT_PREVIEW_SEASON_REVISION" || { echo "VAULT_PREVIEW_SEASON_REVISION is not configured"; exit 1; }
-          test -n "$VAULT_PREVIEW_SEASON_REVISION_HASH" || { echo "VAULT_PREVIEW_SEASON_REVISION_HASH is not configured"; exit 1; }
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v6
@@ -74,7 +67,6 @@ jobs:
           --region "$AWS_REGION"
            --s3-bucket "$LAMBDA_BUILD_BUCKET"
            --configuration Release
-           --template-parameters "VaultPreviewSeasonId=$VAULT_PREVIEW_SEASON_ID;VaultPreviewSeasonRevision=$VAULT_PREVIEW_SEASON_REVISION;VaultPreviewSeasonRevisionHash=$VAULT_PREVIEW_SEASON_REVISION_HASH;VaultPreviewSourceSeasonId=$VAULT_PREVIEW_SOURCE_SEASON_ID"
            --disable-interactive true
 
       - name: Deploy CharacterDataLambda
@@ -84,7 +76,6 @@ jobs:
           --region "$AWS_REGION"
            --s3-bucket "$LAMBDA_BUILD_BUCKET"
            --configuration Release
-           --template-parameters "VaultPreviewSeasonId=$VAULT_PREVIEW_SEASON_ID;VaultPreviewSeasonRevision=$VAULT_PREVIEW_SEASON_REVISION;VaultPreviewSeasonRevisionHash=$VAULT_PREVIEW_SEASON_REVISION_HASH;VaultPreviewSourceSeasonId=$VAULT_PREVIEW_SOURCE_SEASON_ID"
            --disable-interactive true
 
       - name: Deploy BlizzardTokenHandler

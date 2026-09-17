@@ -46,11 +46,19 @@ The API repository owns this schema. Shared fixtures and automated schema valida
 
 ## Functions
 
-- `VaultPreviewLambda` exposes `GET /vault-progress/{region}/{realm}/{character}`.
+- `VaultPreviewLambda` exposes the legacy `GET /vault-progress/{region}/{realm}/{character}` route and the versioned `GET /v1/app-config` and `GET /v1/vault-progress/{region}/{realm}/{character}` routes.
 - `CharacterDataLambda` refreshes cached delve statistics on the scheduled Tuesday trigger.
 - `BlizzardTokenHandler` refreshes the Blizzard OAuth token stored in AWS Systems Manager Parameter Store.
 
 The API stores Blizzard Journal metadata in the existing `vault-preview-data` S3 bucket under `journal-metadata/v1/`. Entries are fresh for 24 hours and may be served as stale last-known-good metadata for up to seven days when Blizzard is unavailable.
+
+The active season configuration uses the same bucket as its durable source of truth:
+
+- `season-config/v1/revisions/{seasonId}/{revision}.json` stores an immutable validated revision document.
+- `season-config/v1/active.json` points to the globally active season revision and its activation timestamp.
+- `season-config/v1/scheduled.json` optionally holds pending activation intent and is promoted by the activation workflow, not by API reads.
+
+Revision documents are validated against the season configuration rules and their lowercase SHA-256 content hash every time they are read. `S3SeasonRevisionProvider.SaveRevision` writes a draft only when the revision key does not already exist; `Activate` and `Rollback` replace the active pointer after validating the selected immutable document. `Schedule` records pending intent and `CancelSchedule` clears it; a future activation Lambda and EventBridge Scheduler will own the promotion step.
 
 The functions expect these SSM parameters in the deployment region:
 
@@ -59,14 +67,7 @@ The functions expect these SSM parameters in the deployment region:
 - `/Blizzard/Token`
 - `/Blizzard/TokenExpires`
 
-Season-aware Delve baseline refreshes also require the active revision provider environment values until the durable configuration endpoint is wired by T08:
-
-- `VAULT_PREVIEW_SEASON_ID`
-- `VAULT_PREVIEW_SEASON_REVISION`
-- `VAULT_PREVIEW_SEASON_REVISION_HASH`
-- Optional `VAULT_PREVIEW_SOURCE_SEASON_ID`
-
-The GitHub Actions deployment requires repository variables with these names and passes them as SAM template parameters to both API Lambdas. Local deployments and `deploy.cmd` require the same environment variables. T08 will replace this bridge with the durable active-season configuration provider.
+The versioned endpoints allow the development and production Vault Preview origins by default (`http://localhost:3000` and `https://vault-preview.bixnpieces.com`). Set `VAULT_PREVIEW_CORS_ORIGINS` to a comma-separated allowlist when a deployment needs different origins.
 
 The API and scheduled-function SAM templates create Lambda execution roles with access limited to the `/Blizzard/*` parameter path and the cache bucket. The token function is deployed directly and therefore needs a separately created execution role.
 
