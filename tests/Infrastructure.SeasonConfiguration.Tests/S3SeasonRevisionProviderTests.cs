@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using Amazon;
 using Amazon.Runtime;
 using Amazon.S3;
@@ -114,6 +115,16 @@ public class S3SeasonRevisionProviderTests
         Assert.Equal(first.Id, (await provider.GetActiveRevision())?.Id);
     }
 
+    [Fact]
+    public async Task GetScheduled_RejectsCorruptPendingPointer()
+    {
+        FakeS3Client s3Client = new();
+        S3SeasonRevisionProvider provider = new(s3Client);
+        s3Client.StoreRaw("season-config/v1/scheduled.json", "{}");
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => provider.GetScheduled());
+    }
+
     private static SeasonConfigurationModel _createConfiguration()
     {
         return new SeasonConfigurationModel(
@@ -156,6 +167,9 @@ public class S3SeasonRevisionProviderTests
         public bool MutateBeforeNextConditionalPut { get; set; }
 
         public bool Contains(string key) => _objects.ContainsKey(key);
+
+        public void StoreRaw(string key, string content) =>
+            _objects[key] = new StoredObject(Encoding.UTF8.GetBytes(content), $"\"etag-{++_etagCounter}\"");
 
         public override Task<GetObjectResponse> GetObjectAsync(
             GetObjectRequest request,

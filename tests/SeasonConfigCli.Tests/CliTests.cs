@@ -149,8 +149,12 @@ public class SeasonConfigurationCliTests
         using JsonDocument input = JsonDocument.Parse(scheduler.CreatedRequest!.Input);
         Assert.Equal("activate", input.RootElement.GetProperty("operation").GetString());
         Assert.Equal("future-season", input.RootElement.GetProperty("seasonId").GetString());
+        DateTime utcActivationAt = activationAt.UtcDateTime;
+        DateTimeOffset expectedActivationAt = new(
+            utcActivationAt.AddTicks(-(utcActivationAt.Ticks % TimeSpan.TicksPerSecond)),
+            TimeSpan.Zero);
         Assert.Equal(
-            activationAt.ToUniversalTime(),
+            expectedActivationAt,
             DateTimeOffset.Parse(input.RootElement.GetProperty("activationAt").GetString()!));
         Assert.Equal(TimeSpan.Zero, scheduler.CreatedRequest!.ActivationAt.Offset);
     }
@@ -232,6 +236,84 @@ public class SeasonConfigurationCliTests
             "vault-preview-activate-future-season-future-season-r1",
             scheduler.DeletedScheduleName);
         Assert.False(s3Client.Contains("season-config/v1/scheduled.json"));
+    }
+
+    [Fact]
+    public async Task Schedule_TruncatesFractionalActivationAtEverywhere()
+    {
+        FakeS3Client s3Client = new();
+        FakeScheduler scheduler = new();
+        SeasonConfiguration configuration = _createConfiguration();
+        SeasonConfigurationCli cli = CreateCli(s3Client, null, scheduler, "test-function", "test-role", "test-group");
+
+        await cli.PublishAsync(
+            WriteTempFile(Serialize(configuration)),
+            "future-season",
+            "future-season-r1");
+        DateTimeOffset requestedAt = DateTimeOffset.UtcNow.AddHours(1).AddMilliseconds(500);
+
+        int result = await cli.ScheduleAsync(
+            "future-season",
+            "future-season-r1",
+            requestedAt);
+
+        SeasonSchedule? pending = await new S3SeasonRevisionProvider(s3Client).GetScheduled();
+        DateTimeOffset expectedAt = new(
+            requestedAt.UtcDateTime.AddTicks(-(requestedAt.UtcDateTime.Ticks % TimeSpan.TicksPerSecond)),
+            TimeSpan.Zero);
+        Assert.Equal(0, result);
+        Assert.Equal(expectedAt, pending?.ActivationAt);
+        Assert.Equal(expectedAt, scheduler.CreatedRequest?.ActivationAt);
+        using JsonDocument input = JsonDocument.Parse(scheduler.CreatedRequest!.Input);
+        Assert.Equal(expectedAt, DateTimeOffset.Parse(input.RootElement.GetProperty("activationAt").GetString()!));
+    }
+
+    [Fact]
+    public async Task Schedule_ReadFailureFailsClosedBeforeCreatingSchedule()
+    {
+        FakeS3Client s3Client = new() { FailScheduledGet = true };
+        FakeScheduler scheduler = new();
+        SeasonConfiguration configuration = _createConfiguration();
+        SeasonConfigurationCli cli = CreateCli(s3Client, null, scheduler, "test-function", "test-role", "test-group");
+
+        await cli.PublishAsync(
+            WriteTempFile(Serialize(configuration)),
+            "future-season",
+            "future-season-r1");
+
+        int result = await cli.ScheduleAsync(
+            "future-season",
+            "future-season-r1",
+            DateTimeOffset.UtcNow.AddHours(1));
+
+        Assert.Equal(1, result);
+        Assert.Null(scheduler.CreatedRequest);
+        Assert.False(s3Client.Contains("season-config/v1/scheduled.json"));
+    }
+
+    [Fact]
+    public async Task Cancel_ReadFailurePreservesPendingSchedule()
+    {
+        FakeS3Client s3Client = new();
+        FakeScheduler scheduler = new();
+        SeasonConfiguration configuration = _createConfiguration();
+        SeasonConfigurationCli cli = CreateCli(s3Client, null, scheduler, "test-function", "test-role", "test-group");
+
+        await cli.PublishAsync(
+            WriteTempFile(Serialize(configuration)),
+            "future-season",
+            "future-season-r1");
+        await cli.ScheduleAsync(
+            "future-season",
+            "future-season-r1",
+            DateTimeOffset.UtcNow.AddHours(1));
+        s3Client.FailScheduledGet = true;
+
+        int result = await cli.CancelAsync();
+
+        Assert.Equal(1, result);
+        Assert.True(s3Client.Contains("season-config/v1/scheduled.json"));
+        Assert.Null(scheduler.DeletedScheduleName);
     }
 
     [Fact]
@@ -564,11 +646,20 @@ public class SeasonConfigurationCliTests
 
         public bool Contains(string key) => _objects.ContainsKey(key);
         public bool FailScheduledPut { get; set; }
+        public bool FailScheduledGet { get; set; }
 
         public override Task<GetObjectResponse> GetObjectAsync(
             GetObjectRequest request,
             CancellationToken cancellationToken)
         {
+            if (FailScheduledGet && request.Key == "season-config/v1/scheduled.json")
+            {
+                throw new AmazonS3Exception("scheduled pointer read failed")
+                {
+                    StatusCode = HttpStatusCode.InternalServerError
+                };
+            }
+
             if (!_objects.TryGetValue(request.Key, out StoredObject? stored))
             {
                 throw new AmazonS3Exception("Not found") { StatusCode = HttpStatusCode.NotFound };

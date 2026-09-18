@@ -213,7 +213,7 @@ public sealed class SeasonConfigurationCli
         if (!_hasSchedulerConfiguration())
             return 1;
 
-        DateTimeOffset activationAtUtc = activationAt.ToUniversalTime();
+        DateTimeOffset activationAtUtc = _toUtcWholeSecond(activationAt);
         if (activationAtUtc <= DateTimeOffset.UtcNow)
         {
             Console.Error.WriteLine("Scheduled activation must be in the future.");
@@ -241,7 +241,16 @@ public sealed class SeasonConfigurationCli
         if (scheduleName == null)
             return 1;
 
-        SeasonSchedule? pending = await _store.GetScheduled(cancellationToken);
+        SeasonSchedule? pending;
+        try
+        {
+            pending = await _store.GetScheduled(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Unable to read pending schedule state: {exception.Message}");
+            return 1;
+        }
         string? pendingScheduleName = pending == null
             ? null
             : _tryGetScheduleName(pending.SeasonId, pending.RevisionId);
@@ -370,7 +379,16 @@ public sealed class SeasonConfigurationCli
             return 1;
         }
 
-        SeasonSchedule? pending = await _store.GetScheduled(cancellationToken);
+        SeasonSchedule? pending;
+        try
+        {
+            pending = await _store.GetScheduled(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"Unable to read pending schedule state: {exception.Message}");
+            return 1;
+        }
         if (pending == null)
         {
             await _store.CancelSchedule(cancellationToken);
@@ -436,7 +454,7 @@ public sealed class SeasonConfigurationCli
                 previousSchedule.SeasonId,
                 previousSchedule.RevisionId,
                 previousSchedule.RevisionHash,
-                previousSchedule.ActivationAt.ToUniversalTime());
+                _toUtcWholeSecond(previousSchedule.ActivationAt));
             await _scheduler!.CreateOrUpdateScheduleAsync(previousRequest, cancellationToken);
         }
         catch (Exception exception)
@@ -590,6 +608,13 @@ public sealed class SeasonConfigurationCli
 
     private static DateTimeOffset? _toUtc(DateTimeOffset? value) =>
         value?.ToUniversalTime();
+
+    private static DateTimeOffset _toUtcWholeSecond(DateTimeOffset value)
+    {
+        DateTime utc = value.UtcDateTime;
+        long ticks = utc.Ticks - (utc.Ticks % TimeSpan.TicksPerSecond);
+        return new DateTimeOffset(new DateTime(ticks, DateTimeKind.Utc));
+    }
 
     private static void _printErrors(string header, IReadOnlyList<string> errors)
     {

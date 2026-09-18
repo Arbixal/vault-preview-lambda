@@ -229,11 +229,17 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
 
     public async Task<SeasonSchedule?> GetScheduled(CancellationToken cancellationToken = default)
     {
-        ActiveSeasonPointer? pointer = await _getDocument<ActiveSeasonPointer>(
+        ActiveSeasonPointer? pointer = await _getControlPlaneDocument<ActiveSeasonPointer>(
             _SCHEDULED_KEY,
             cancellationToken);
-        if (!_hasValidPointer(pointer))
+        if (pointer == null)
             return null;
+
+        if (!_hasValidPointer(pointer))
+        {
+            throw new InvalidDataException(
+                "The pending season activation pointer is invalid.");
+        }
 
         return new SeasonSchedule(
             pointer!.SeasonId,
@@ -304,6 +310,57 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
     {
         DocumentRead<T>? document = await _getDocumentWithEtag<T>(key, cancellationToken);
         return document?.Value;
+    }
+
+    private async Task<T?> _getControlPlaneDocument<T>(
+        string key,
+        CancellationToken cancellationToken)
+        where T : class
+    {
+        try
+        {
+            using GetObjectResponse response = await s3Client.GetObjectAsync(
+                new GetObjectRequest
+                {
+                    BucketName = _getBucketName(),
+                    Key = key
+                },
+                cancellationToken);
+
+            T? document = await JsonSerializer.DeserializeAsync<T>(
+                response.ResponseStream,
+                _jsonOptions,
+                cancellationToken);
+            if (document == null)
+            {
+                throw new InvalidDataException(
+                    $"Season control-plane object '{key}' is empty or null.");
+            }
+
+            return document;
+        }
+        catch (AmazonS3Exception exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+        catch (AmazonS3Exception exception)
+        {
+            throw new IOException(
+                $"Unable to read season control-plane object '{key}'.",
+                exception);
+        }
+        catch (JsonException exception)
+        {
+            throw new InvalidDataException(
+                $"Season control-plane object '{key}' contains invalid JSON.",
+                exception);
+        }
+        catch (NotSupportedException exception)
+        {
+            throw new InvalidDataException(
+                $"Season control-plane object '{key}' has an unsupported shape.",
+                exception);
+        }
     }
 
     private async Task<DocumentRead<T>?> _getDocumentWithEtag<T>(
@@ -395,8 +452,15 @@ public sealed class S3SeasonRevisionProvider(IAmazonS3 s3Client)
         pointer != null &&
         _hasSafeKeyPart(pointer.SeasonId) &&
         _hasSafeKeyPart(pointer.Revision) &&
-        !string.IsNullOrWhiteSpace(pointer.RevisionHash) &&
+        _isValidRevisionHash(pointer.RevisionHash) &&
         pointer.ActivationAt > DateTimeOffset.UnixEpoch;
+
+    private static bool _isValidRevisionHash(string? revisionHash) =>
+        !string.IsNullOrWhiteSpace(revisionHash) &&
+        revisionHash.StartsWith("sha256:", StringComparison.Ordinal) &&
+        revisionHash.Length == "sha256:".Length + 64 &&
+        revisionHash[7..].All(static character =>
+            character is >= '0' and <= '9' or >= 'a' and <= 'f');
 
     private static bool _hasSafeKeyPart(string value) =>
         !string.IsNullOrWhiteSpace(value) &&
