@@ -149,7 +149,7 @@ jobs:
 
   operate:
     if: github.event_name == 'workflow_dispatch'
-    name: ${{ inputs.operation }} season configuration
+    name: Run season configuration operation
     runs-on: ubuntu-24.04
     concurrency:
       group: production-season-configuration
