@@ -226,6 +226,8 @@ In the repository's **Settings > Secrets and variables > Actions**, add:
 
 The workflow already grants `id-token: write` and uses `aws-actions/configure-aws-credentials`. Do not add `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY` GitHub secrets for this workflow. Restrict the IAM trust policy to the exact repository and branch, and protect the `master` branch or deployment environment as appropriate.
 
+The season configuration workflow uses a separate protected `production` GitHub environment and must not reuse the broad deployment role. Configure environment secret `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` and the season delivery variables documented in [`season-config/README.md`](season-config/README.md). That role is limited to immutable revision objects, named EventBridge schedules, activation Lambda invocation, and passing the scheduler execution role; it cannot write the active season pointer.
+
 ## Deployment
 
 ### Local deployment

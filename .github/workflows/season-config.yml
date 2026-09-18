@@ -1,0 +1,407 @@
+name: Season Configuration
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "season-config/**"
+      - "src/Infrastructure.SeasonConfiguration/**"
+      - "src/SeasonConfigCli/**"
+      - "src/VaultShared/Seasons/**"
+      - "tests/Infrastructure.SeasonConfiguration.Tests/**"
+      - "tests/SeasonConfigCli.Tests/**"
+      - ".github/workflows/season-config.yml"
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Lifecycle operation to run in the protected production environment
+        required: true
+        type: choice
+        options:
+          - publish
+          - activate
+          - schedule
+          - rollback
+          - cancel
+      source_file:
+        description: Source definition path, required for publish
+        required: false
+        type: string
+      season_id:
+        description: Public season ID, required except for cancel
+        required: false
+        type: string
+      revision_id:
+        description: Immutable revision ID, required except for cancel
+        required: false
+        type: string
+      activation_at:
+        description: ISO-8601 timestamp; required for schedule and optional for activate/rollback
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    name: Validate season definitions
+    runs-on: ubuntu-24.04
+    outputs:
+      revision_metadata: ${{ steps.validate_definitions.outputs.revision_metadata }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore VaultPreviewLambda.sln
+
+      - name: Build solution
+        run: dotnet build VaultPreviewLambda.sln --configuration Release --no-restore
+
+      - name: Run configuration and calculation tests
+        run: dotnet test VaultPreviewLambda.sln --configuration Release --no-build --no-restore
+
+      - name: Validate committed definitions
+        id: validate_definitions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          metadata_file="$(mktemp)"
+          trap 'rm -f "$metadata_file"' EXIT
+          : > "$metadata_file"
+
+          mapfile -t source_files < <(
+            git ls-files 'season-config/definitions/**/*.json' | sort
+          )
+          if (( ${#source_files[@]} == 0 )); then
+            echo "No committed season definitions were found."
+            exit 1
+          fi
+
+          for source_file in "${source_files[@]}"; do
+            relative_path="${source_file#season-config/definitions/}"
+            if [[ ! "$source_file" =~ ^season-config/definitions/[^/]+/[^/]+\.json$ ]]; then
+              echo "Source definition '$source_file' must use exactly 'season-config/definitions/{seasonId}/{revisionId}.json'." >&2
+              exit 1
+            fi
+            season_id="${relative_path%%/*}"
+            file_name="${source_file##*/}"
+            revision_id="${file_name%.json}"
+
+            if [[ ! "$season_id" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+              echo "Invalid season directory name in '$source_file': '$season_id'." >&2
+              exit 1
+            fi
+            if [[ ! "$revision_id" =~ ^${season_id}-r[0-9]+$ ]]; then
+              echo "Revision file '$source_file' must use '${season_id}-r<number>'." >&2
+              exit 1
+            fi
+
+            validation_output="$(dotnet run \
+              --project src/SeasonConfigCli/SeasonConfigCli.csproj \
+              --configuration Release \
+              --no-build \
+              --no-restore \
+              -- validate "$source_file")"
+            printf '%s\n' "$validation_output"
+
+            configuration_id="$(printf '%s\n' "$validation_output" | \
+              awk -F "'" '/^Valid configuration/ { print $2; exit }')"
+            if [[ "$configuration_id" != "$season_id" ]]; then
+              echo "Configuration ID '$configuration_id' does not match season directory '$season_id' in '$source_file'." >&2
+              exit 1
+            fi
+
+            revision_hash="$(printf '%s\n' "$validation_output" | \
+              awk -F 'Revision hash: ' '/Revision hash:/ { print $2; exit }')"
+            if [[ ! "$revision_hash" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Validation did not produce a canonical revision hash for '$source_file'." >&2
+              exit 1
+            fi
+
+            printf '%s\t%s\t%s\t%s\n' \
+              "$source_file" "$season_id" "$revision_id" "$revision_hash" \
+              >> "$metadata_file"
+          done
+
+          {
+            echo "## Season Definition Validation"
+            echo
+            echo '| Source | Season | Revision | Hash |'
+            echo '| --- | --- | --- | --- |'
+            while IFS=$'\t' read -r source_file season_id revision_id revision_hash; do
+              echo "| \`$source_file\` | \`$season_id\` | \`$revision_id\` | \`$revision_hash\` |"
+            done < "$metadata_file"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "revision_metadata<<EOF"
+            cat "$metadata_file"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  operate:
+    if: github.event_name == 'workflow_dispatch'
+    name: Run season configuration operation
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: production-season-configuration
+      queue: max
+      cancel-in-progress: false
+    environment:
+      name: production
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      revision_id: ${{ steps.execute.outputs.revision_id }}
+      revision_hash: ${{ steps.execute.outputs.revision_hash }}
+      revision_metadata: ${{ steps.execute.outputs.revision_metadata }}
+    env:
+      OPERATION: ${{ inputs.operation }}
+      SOURCE_FILE: ${{ inputs.source_file }}
+      SEASON_ID: ${{ inputs.season_id }}
+      REVISION_ID: ${{ inputs.revision_id }}
+      ACTIVATION_AT: ${{ inputs.activation_at }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      VAULT_PREVIEW_DATA_BUCKET: ${{ vars.VAULT_PREVIEW_DATA_BUCKET }}
+      VAULT_PREVIEW_CONFIG_ENVIRONMENT: ${{ vars.VAULT_PREVIEW_CONFIG_ENVIRONMENT }}
+      VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME: ${{ vars.VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME }}
+      VAULT_PREVIEW_ACTIVATION_FUNCTION_ARN: ${{ vars.VAULT_PREVIEW_ACTIVATION_FUNCTION_ARN }}
+      VAULT_PREVIEW_SCHEDULER_ROLE_ARN: ${{ vars.VAULT_PREVIEW_SCHEDULER_ROLE_ARN }}
+      VAULT_PREVIEW_SCHEDULER_GROUP: ${{ vars.VAULT_PREVIEW_SCHEDULER_GROUP }}
+      VAULT_PREVIEW_SCHEDULER_DEAD_LETTER_QUEUE_ARN: ${{ vars.VAULT_PREVIEW_SCHEDULER_DEAD_LETTER_QUEUE_ARN }}
+      SEASON_CONFIG_AWS_ROLE_TO_ASSUME: ${{ secrets.SEASON_CONFIG_AWS_ROLE_TO_ASSUME }}
+    steps:
+      - name: Require the default branch
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
+            echo "Mutating season configuration operations must be dispatched from master." >&2
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Validate workflow configuration
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          required_values=(
+            AWS_REGION
+            VAULT_PREVIEW_DATA_BUCKET
+            VAULT_PREVIEW_CONFIG_ENVIRONMENT
+            VAULT_PREVIEW_ACTIVATION_FUNCTION_ARN
+            VAULT_PREVIEW_SCHEDULER_ROLE_ARN
+            VAULT_PREVIEW_SCHEDULER_GROUP
+            VAULT_PREVIEW_SCHEDULER_DEAD_LETTER_QUEUE_ARN
+            SEASON_CONFIG_AWS_ROLE_TO_ASSUME
+          )
+          for variable_name in "${required_values[@]}"; do
+            if [[ -z "${!variable_name:-}" ]]; then
+              echo "Required production configuration '$variable_name' is not set." >&2
+              exit 1
+            fi
+          done
+          if [[ "$VAULT_PREVIEW_CONFIG_ENVIRONMENT" != "production" ]]; then
+            echo "VAULT_PREVIEW_CONFIG_ENVIRONMENT must be 'production' for this workflow." >&2
+            exit 1
+          fi
+
+          if [[ -z "${VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME:-}" ]]; then
+            VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME="$VAULT_PREVIEW_ACTIVATION_FUNCTION_ARN"
+            export VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME
+            echo "VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME=$VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME" >> "$GITHUB_ENV"
+          fi
+
+          case "$OPERATION" in
+            publish)
+              [[ -n "$SOURCE_FILE" && -n "$SEASON_ID" && -n "$REVISION_ID" ]] || {
+                echo "publish requires source_file, season_id, and revision_id." >&2
+                exit 1
+              }
+              if [[ ! "$SOURCE_FILE" =~ ^season-config/definitions/[^/]+/[^/]+\.json$ ]]; then
+                echo "source_file must use exactly 'season-config/definitions/{seasonId}/{revisionId}.json'." >&2
+                exit 1
+              fi
+              git ls-files --error-unmatch "$SOURCE_FILE" >/dev/null || {
+                echo "source_file '$SOURCE_FILE' is not a tracked repository file." >&2
+                exit 1
+              }
+              source_season_id="${SOURCE_FILE#season-config/definitions/}"
+              source_season_id="${source_season_id%%/*}"
+              source_revision_id="${SOURCE_FILE##*/}"
+              source_revision_id="${source_revision_id%.json}"
+              if [[ "$SEASON_ID" != "$source_season_id" || "$REVISION_ID" != "$source_revision_id" ]]; then
+                echo "publish IDs must match the source file path." >&2
+                exit 1
+              fi
+              ;;
+            activate|rollback)
+              [[ -n "$SEASON_ID" && -n "$REVISION_ID" ]] || {
+                echo "$OPERATION requires season_id and revision_id." >&2
+                exit 1
+              }
+              ;;
+            schedule)
+              [[ -n "$SEASON_ID" && -n "$REVISION_ID" && -n "$ACTIVATION_AT" ]] || {
+                echo "schedule requires season_id, revision_id, and activation_at." >&2
+                exit 1
+              }
+              ;;
+            cancel) ;;
+            *)
+              echo "Unsupported operation '$OPERATION'." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.SEASON_CONFIG_AWS_ROLE_TO_ASSUME }}
+          role-session-name: github-actions-season-config-${{ github.run_id }}
+
+      - name: Restore dependencies
+        run: dotnet restore src/SeasonConfigCli/SeasonConfigCli.csproj
+
+      - name: Build configuration CLI
+        run: dotnet build src/SeasonConfigCli/SeasonConfigCli.csproj --configuration Release --no-restore
+
+      - name: Execute lifecycle operation
+        id: execute
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          command_output=""
+          case "$OPERATION" in
+            publish)
+              command_output="$(dotnet run \
+                --project src/SeasonConfigCli/SeasonConfigCli.csproj \
+                --configuration Release \
+                --no-build \
+                --no-restore \
+                -- publish "$SOURCE_FILE" "$SEASON_ID" "$REVISION_ID" 2>&1)" || {
+                printf '%s\n' "$command_output" >&2
+                exit 1
+              }
+              ;;
+            activate|rollback)
+              if [[ -n "$ACTIVATION_AT" ]]; then
+                command_output="$(dotnet run \
+                  --project src/SeasonConfigCli/SeasonConfigCli.csproj \
+                  --configuration Release \
+                  --no-build \
+                  --no-restore \
+                  -- "$OPERATION" "$SEASON_ID" "$REVISION_ID" "$ACTIVATION_AT" 2>&1)" || {
+                  printf '%s\n' "$command_output" >&2
+                  exit 1
+                }
+              else
+                command_output="$(dotnet run \
+                  --project src/SeasonConfigCli/SeasonConfigCli.csproj \
+                  --configuration Release \
+                  --no-build \
+                  --no-restore \
+                  -- "$OPERATION" "$SEASON_ID" "$REVISION_ID" 2>&1)" || {
+                  printf '%s\n' "$command_output" >&2
+                  exit 1
+                }
+              fi
+              ;;
+            schedule)
+              command_output="$(dotnet run \
+                --project src/SeasonConfigCli/SeasonConfigCli.csproj \
+                --configuration Release \
+                --no-build \
+                --no-restore \
+                -- schedule "$SEASON_ID" "$REVISION_ID" "$ACTIVATION_AT" 2>&1)" || {
+                printf '%s\n' "$command_output" >&2
+                exit 1
+              }
+              ;;
+            cancel)
+              command_output="$(dotnet run \
+                --project src/SeasonConfigCli/SeasonConfigCli.csproj \
+                --configuration Release \
+                --no-build \
+                --no-restore \
+                -- cancel 2>&1)" || {
+                printf '%s\n' "$command_output" >&2
+                exit 1
+              }
+              ;;
+          esac
+
+          if [[ "$OPERATION" == "publish" ]]; then
+            revision_validation="$(dotnet run \
+              --project src/SeasonConfigCli/SeasonConfigCli.csproj \
+              --configuration Release \
+              --no-build \
+              --no-restore \
+              -- validate "$SOURCE_FILE" 2>&1)" || {
+              printf '%s\n' "$command_output" >&2
+              printf '%s\n' "$revision_validation" >&2
+              exit 1
+            }
+            printf '%s\n' "$command_output"
+            printf '%s\n' "$revision_validation"
+          else
+            printf '%s\n' "$command_output"
+          fi
+
+          {
+            echo "## Season Configuration Operation"
+            echo
+            echo "- Environment: \`$VAULT_PREVIEW_CONFIG_ENVIRONMENT\`"
+            echo "- Operation: \`$OPERATION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$OPERATION" == "publish" ]]; then
+            revision_hash="$(printf '%s\n' "$revision_validation" | \
+              awk -F 'hash ' '/Published revision/ { print $2; exit }')"
+            if [[ -z "$revision_hash" ]]; then
+              revision_hash="$(printf '%s\n' "$revision_validation" | \
+                awk -F 'Revision hash: ' '/Revision hash:/ { print $2; exit }')"
+            fi
+            if [[ ! "$revision_hash" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "publish did not produce a canonical revision hash." >&2
+              exit 1
+            fi
+
+            echo "revision_id=$REVISION_ID" >> "$GITHUB_OUTPUT"
+            echo "revision_hash=$revision_hash" >> "$GITHUB_OUTPUT"
+            {
+              echo "revision_metadata<<EOF"
+              printf '%s\t%s\t%s\n' "$SEASON_ID" "$REVISION_ID" "$revision_hash"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            {
+              echo
+              echo "- Revision: \`$REVISION_ID\`"
+              echo "- Revision hash: \`$revision_hash\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
