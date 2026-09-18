@@ -91,6 +91,10 @@ jobs:
 
           for source_file in "${source_files[@]}"; do
             relative_path="${source_file#season-config/definitions/}"
+            if [[ ! "$source_file" =~ ^season-config/definitions/[^/]+/[^/]+\.json$ ]]; then
+              echo "Source definition '$source_file' must use exactly 'season-config/definitions/{seasonId}/{revisionId}.json'." >&2
+              exit 1
+            fi
             season_id="${relative_path%%/*}"
             file_name="${source_file##*/}"
             revision_id="${file_name%.json}"
@@ -153,6 +157,7 @@ jobs:
     runs-on: ubuntu-24.04
     concurrency:
       group: production-season-configuration
+      queue: max
       cancel-in-progress: false
     environment:
       name: production
@@ -236,13 +241,10 @@ jobs:
                 echo "publish requires source_file, season_id, and revision_id." >&2
                 exit 1
               }
-              case "$SOURCE_FILE" in
-                season-config/definitions/*/*.json) ;;
-                *)
-                  echo "source_file must be under season-config/definitions/<season>/<revision>.json." >&2
-                  exit 1
-                  ;;
-              esac
+              if [[ ! "$SOURCE_FILE" =~ ^season-config/definitions/[^/]+/[^/]+\.json$ ]]; then
+                echo "source_file must use exactly 'season-config/definitions/{seasonId}/{revisionId}.json'." >&2
+                exit 1
+              fi
               git ls-files --error-unmatch "$SOURCE_FILE" >/dev/null || {
                 echo "source_file '$SOURCE_FILE' is not a tracked repository file." >&2
                 exit 1

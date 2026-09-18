@@ -192,7 +192,7 @@ The configuration-delivery role may publish revision objects and manage named sc
 `.github/workflows/season-config.yml` has two paths:
 
 - Pull requests validate every committed definition, run the solution tests, compute each deterministic revision hash, and publish the source/revision/hash table in the workflow summary. This path does not request AWS credentials or write runtime state.
-- A manual dispatch from `master` runs one of `publish`, `activate`, `schedule`, `rollback`, or `cancel`. The job is bound to the protected GitHub `production` environment, so environment reviewers approve all mutating operations before AWS authentication.
+- A manual dispatch from `master` runs one of `publish`, `activate`, `schedule`, `rollback`, or `cancel`. The job is bound to the protected GitHub `production` environment, so environment reviewers approve all mutating operations before AWS authentication. Mutating runs use a non-canceling concurrency queue with up to 100 pending runs; admitted runs are processed one at a time in GitHub's FIFO wait order.
 
 Configure these values on the `production` environment:
 
