@@ -182,9 +182,40 @@ The CLI and GitHub Actions workflow should accept these inputs rather than embed
 | `VAULT_PREVIEW_SCHEDULER_GROUP` | Optional scheduler group used to isolate season schedules. |
 | `VAULT_PREVIEW_SCHEDULER_DEAD_LETTER_QUEUE_ARN` | CloudFormation `SchedulerDeadLetterQueueArn` output used for failed scheduled invocations. |
 | `VAULT_PREVIEW_CONFIG_ENVIRONMENT` | Logical environment name used by protected GitHub environments and workflow output. |
-| `AWS_ROLE_TO_ASSUME` | GitHub OIDC deployment role; no long-lived AWS credentials are stored in the repository. |
+| `AWS_ROLE_TO_ASSUME` | GitHub OIDC application deployment role used by the Lambda deployment workflow. |
+| `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC configuration-delivery role used by the season workflow. |
 
-The GitHub Actions role may publish revision objects and manage named schedules, but active-state writes remain restricted to the activation Lambda role.
+The configuration-delivery role may publish revision objects and manage named schedules, but active-state writes remain restricted to the activation Lambda role.
+
+## GitHub Actions Delivery
+
+`.github/workflows/season-config.yml` has two paths:
+
+- Pull requests validate every committed definition, run the solution tests, compute each deterministic revision hash, and publish the source/revision/hash table in the workflow summary. This path does not request AWS credentials or write runtime state.
+- A manual dispatch from `master` runs one of `publish`, `activate`, `schedule`, `rollback`, or `cancel`. The job is bound to the protected GitHub `production` environment, so environment reviewers approve all mutating operations before AWS authentication.
+
+Configure these values on the `production` environment:
+
+| Type | Name | Purpose |
+| --- | --- | --- |
+| Secret | `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC role for season revision delivery; do not reuse the broad application deployment role. |
+| Variable | `AWS_REGION` | Region containing the data bucket and activation resources. |
+| Variable | `VAULT_PREVIEW_DATA_BUCKET` | Existing durable data bucket. |
+| Variable | `VAULT_PREVIEW_CONFIG_ENVIRONMENT` | Must be `production` for this workflow. |
+| Variable | `VAULT_PREVIEW_ACTIVATION_FUNCTION_NAME` | Activation Lambda name; its ARN is used when the name is omitted. |
+| Variable | `VAULT_PREVIEW_ACTIVATION_FUNCTION_ARN` | T19 `ActivationFunctionArn` stack output. |
+| Variable | `VAULT_PREVIEW_SCHEDULER_ROLE_ARN` | T19 `SchedulerRoleArn` stack output. |
+| Variable | `VAULT_PREVIEW_SCHEDULER_GROUP` | T19 `SchedulerGroupName` stack output. |
+| Variable | `VAULT_PREVIEW_SCHEDULER_DEAD_LETTER_QUEUE_ARN` | T19 `SchedulerDeadLetterQueueArn` stack output. |
+
+The configuration-delivery role should trust the repository's GitHub OIDC provider with the `production` environment subject and grant only:
+
+- `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` for the revision and scheduled control-plane objects under `season-config/v1/`.
+- `lambda:InvokeFunction` for the activation Lambda.
+- `scheduler:CreateSchedule`, `scheduler:UpdateSchedule`, and `scheduler:DeleteSchedule` for schedules in the configured scheduler group.
+- `iam:PassRole` for the configured scheduler execution role only.
+
+It must not be allowed to write `active.json`; only the activation Lambda may promote active state. The workflow does not use `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, or other long-lived credentials.
 
 ## Retention
 
