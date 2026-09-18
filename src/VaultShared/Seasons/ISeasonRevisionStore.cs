@@ -21,6 +21,8 @@ public interface ISeasonRevisionStore : ISeasonRevisionProvider
         DateTimeOffset activationAt,
         CancellationToken cancellationToken = default);
 
+    Task<SeasonSchedule?> GetScheduled(CancellationToken cancellationToken = default);
+
     Task CancelSchedule(CancellationToken cancellationToken = default);
 
     Task Rollback(
