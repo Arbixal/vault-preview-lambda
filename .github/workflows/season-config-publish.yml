@@ -1,0 +1,30 @@
+name: Season Configuration Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_file:
+        description: Tracked source definition path
+        required: true
+        type: string
+      season_id:
+        description: Public season ID
+        required: true
+        type: string
+      revision_id:
+        description: Immutable revision ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    uses: ./.github/workflows/season-config-operation.yml
+    with:
+      operation: publish
+      source_file: ${{ inputs.source_file }}
+      season_id: ${{ inputs.season_id }}
+      revision_id: ${{ inputs.revision_id }}

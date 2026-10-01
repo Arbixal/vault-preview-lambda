@@ -1,0 +1,30 @@
+name: Season Configuration Schedule
+
+on:
+  workflow_dispatch:
+    inputs:
+      season_id:
+        description: Public season ID
+        required: true
+        type: string
+      revision_id:
+        description: Immutable revision ID to activate
+        required: true
+        type: string
+      activation_at:
+        description: ISO-8601 UTC activation timestamp
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  schedule:
+    uses: ./.github/workflows/season-config-operation.yml
+    with:
+      operation: schedule
+      season_id: ${{ inputs.season_id }}
+      revision_id: ${{ inputs.revision_id }}
+      activation_at: ${{ inputs.activation_at }}

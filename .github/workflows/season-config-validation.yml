@@ -1,0 +1,114 @@
+name: Season Configuration Validation
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "season-config/**"
+      - "src/Infrastructure.SeasonConfiguration/**"
+      - "src/SeasonConfigCli/**"
+      - "src/VaultShared/Seasons/**"
+      - "tests/Infrastructure.SeasonConfiguration.Tests/**"
+      - "tests/SeasonConfigCli.Tests/**"
+      - ".github/workflows/season-config-*.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate season definitions
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        run: dotnet restore VaultPreviewLambda.sln
+
+      - name: Build solution
+        run: dotnet build VaultPreviewLambda.sln --configuration Release --no-restore
+
+      - name: Run configuration and calculation tests
+        run: dotnet test VaultPreviewLambda.sln --configuration Release --no-build --no-restore
+
+      - name: Validate committed definitions
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          metadata_file="$(mktemp)"
+          trap 'rm -f "$metadata_file"' EXIT
+          : > "$metadata_file"
+
+          mapfile -t source_files < <(
+            git ls-files 'season-config/definitions/**/*.json' | sort
+          )
+          if (( ${#source_files[@]} == 0 )); then
+            echo "No committed season definitions were found."
+            exit 1
+          fi
+
+          for source_file in "${source_files[@]}"; do
+            relative_path="${source_file#season-config/definitions/}"
+            if [[ ! "$source_file" =~ ^season-config/definitions/[^/]+/[^/]+\.json$ ]]; then
+              echo "Source definition '$source_file' must use exactly 'season-config/definitions/{seasonId}/{revisionId}.json'." >&2
+              exit 1
+            fi
+            season_id="${relative_path%%/*}"
+            file_name="${source_file##*/}"
+            revision_id="${file_name%.json}"
+
+            if [[ ! "$season_id" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+              echo "Invalid season directory name in '$source_file': '$season_id'." >&2
+              exit 1
+            fi
+            if [[ ! "$revision_id" =~ ^${season_id}-r[0-9]+$ ]]; then
+              echo "Revision file '$source_file' must use '${season_id}-r<number>'." >&2
+              exit 1
+            fi
+
+            validation_output="$(dotnet run \
+              --project src/SeasonConfigCli/SeasonConfigCli.csproj \
+              --configuration Release \
+              --no-build \
+              --no-restore \
+              -- validate "$source_file")"
+            printf '%s\n' "$validation_output"
+
+            configuration_id="$(printf '%s\n' "$validation_output" | \
+              awk -F "'" '/^Valid configuration/ { print $2; exit }')"
+            if [[ "$configuration_id" != "$season_id" ]]; then
+              echo "Configuration ID '$configuration_id' does not match season directory '$season_id' in '$source_file'." >&2
+              exit 1
+            fi
+
+            revision_hash="$(printf '%s\n' "$validation_output" | \
+              awk -F 'Revision hash: ' '/Revision hash:/ { print $2; exit }')"
+            if [[ ! "$revision_hash" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "Validation did not produce a canonical revision hash for '$source_file'." >&2
+              exit 1
+            fi
+
+            printf '%s\t%s\t%s\t%s\n' \
+              "$source_file" "$season_id" "$revision_id" "$revision_hash" \
+              >> "$metadata_file"
+          done
+
+          {
+            echo "## Season Definition Validation"
+            echo
+            echo '| Source | Season | Revision | Hash |'
+            echo '| --- | --- | --- | --- |'
+            while IFS=$'\t' read -r source_file season_id revision_id revision_hash; do
+              echo "| \`$source_file\` | \`$season_id\` | \`$revision_id\` | \`$revision_hash\` |"
+            done < "$metadata_file"
+          } >> "$GITHUB_STEP_SUMMARY"
