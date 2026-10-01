@@ -113,6 +113,30 @@ public class SeasonConfigurationCliTests
     }
 
     [Fact]
+    public async Task Publish_DifferentContentForExistingRevisionReturnsOne()
+    {
+        FakeS3Client s3Client = new();
+        SeasonConfigurationCli cli = CreateCli(s3Client);
+        SeasonConfiguration firstConfiguration = _createConfiguration();
+        SeasonConfiguration secondConfiguration = firstConfiguration with
+        {
+            ShortLabel = "Future Revised"
+        };
+
+        int firstResult = await cli.PublishAsync(
+            WriteTempFile(Serialize(firstConfiguration)),
+            "future-season",
+            "future-season-r1");
+        int secondResult = await cli.PublishAsync(
+            WriteTempFile(Serialize(secondConfiguration)),
+            "future-season",
+            "future-season-r1");
+
+        Assert.Equal(0, firstResult);
+        Assert.Equal(1, secondResult);
+    }
+
+    [Fact]
     public async Task Publish_InvalidRevisionId_ReturnsOne()
     {
         SeasonConfiguration configuration = _createConfiguration();

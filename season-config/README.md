@@ -120,7 +120,7 @@ Unknown future kinds are allowed by the format and are returned through the gene
 
 The item levels in this example are illustrative configuration values showing the complete shape. They must be replaced or approved by the API content owner before publishing a production revision.
 
-`definitions/midnight-s2/midnight-s2-r1.json` is a current-season workflow smoke-test candidate. Its season and Journal source IDs come from the current Season 2 fixtures; its 318 item-level mappings mirror the fixture baseline and still require content-owner approval before production publishing.
+`definitions/midnight-s2/midnight-s2-r1.json` is the approved current-season workflow smoke-test definition. Its season and Journal source IDs come from the current Season 2 fixtures; its 318 item-level mappings mirror the fixture baseline. It is not active until it has been published and activated through the delivery workflow.
 
 ## Generated Revision Artifact
 
@@ -172,7 +172,7 @@ season-config/v1/scheduled.json
 
 ## Delivery Inputs
 
-The CLI and GitHub Actions workflow should accept these inputs rather than embedding deployment values in source definitions:
+The CLI and GitHub Actions workflows should accept these inputs rather than embedding deployment values in source definitions:
 
 | Input | Purpose |
 | --- | --- |
@@ -201,6 +201,11 @@ The GitHub Actions delivery is split into focused workflows:
 - `.github/workflows/season-config-cancel.yml` cancels the pending schedule and requires no inputs.
 
 The five mutating workflows call `.github/workflows/season-config-operation.yml` for their shared implementation. Each operation must be dispatched from `master`, uses the protected GitHub `production` environment, and requires environment approval before AWS authentication. They share the existing configuration-delivery role and a non-canceling concurrency queue, so operations remain serialized across workflows.
+
+The operator procedure is documented in [`RUNBOOK.md`](RUNBOOK.md). The
+production smoke check is [`smoke-check.mjs`](smoke-check.mjs); it verifies
+active app configuration, ETag revalidation, and matching character revision
+metadata without modifying AWS state.
 
 Configure these values on the `production` environment:
 
