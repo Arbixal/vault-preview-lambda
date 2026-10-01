@@ -9,6 +9,7 @@ public class SeasonSourceDefinitionTests
     [Theory]
     [InlineData("future-season-r1.json", "future-season-r1", "future-season")]
     [InlineData("midnight-s1-r1.json", "midnight-s1-r1", "midnight-s1")]
+    [InlineData("midnight-s2-r1.json", "midnight-s2-r1", "midnight-s2")]
     public void ExampleSourceDefinition_MapsToAValidatedImmutableRevision(
         string fixtureName,
         string revisionId,

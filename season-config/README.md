@@ -120,6 +120,8 @@ Unknown future kinds are allowed by the format and are returned through the gene
 
 The item levels in this example are illustrative configuration values showing the complete shape. They must be replaced or approved by the API content owner before publishing a production revision.
 
+`definitions/midnight-s2/midnight-s2-r1.json` is a current-season workflow smoke-test candidate. Its season and Journal source IDs come from the current Season 2 fixtures; its 318 item-level mappings mirror the fixture baseline and still require content-owner approval before production publishing.
+
 ## Generated Revision Artifact
 
 The CLI converts a source file into:

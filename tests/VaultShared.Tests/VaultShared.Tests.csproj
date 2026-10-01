@@ -24,5 +24,8 @@
     <None Include="../../season-config/definitions/midnight-s1/midnight-s1-r1.json"
           Link="Fixtures/midnight-s1-r1.json"
           CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../season-config/definitions/midnight-s2/midnight-s2-r1.json"
+          Link="Fixtures/midnight-s2-r1.json"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
