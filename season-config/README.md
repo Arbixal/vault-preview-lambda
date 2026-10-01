@@ -185,7 +185,7 @@ The CLI and GitHub Actions workflows should accept these inputs rather than embe
 | `VAULT_PREVIEW_SCHEDULER_DEAD_LETTER_QUEUE_ARN` | CloudFormation `SchedulerDeadLetterQueueArn` output used for failed scheduled invocations. |
 | `VAULT_PREVIEW_CONFIG_ENVIRONMENT` | Logical environment name used by protected GitHub environments and workflow output. |
 | `AWS_ROLE_TO_ASSUME` | GitHub OIDC application deployment role used by the Lambda deployment workflow. |
-| `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC configuration-delivery role used by the season workflow. |
+| `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC configuration-delivery role used by the season workflow. This is an environment variable because the value is a role ARN, not a credential. |
 
 The configuration-delivery role may publish revision objects and manage named schedules, but active-state writes remain restricted to the activation Lambda role.
 
@@ -211,7 +211,7 @@ Configure these values on the `production` environment:
 
 | Type | Name | Purpose |
 | --- | --- | --- |
-| Secret | `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC role for season revision delivery; do not reuse the broad application deployment role. |
+| Variable | `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC role ARN for season revision delivery; do not reuse the broad application deployment role. |
 | Variable | `AWS_REGION` | Region containing the data bucket and activation resources. |
 | Variable | `VAULT_PREVIEW_DATA_BUCKET` | Existing durable data bucket. |
 | Variable | `VAULT_PREVIEW_CONFIG_ENVIRONMENT` | Must be `production` for this workflow. |

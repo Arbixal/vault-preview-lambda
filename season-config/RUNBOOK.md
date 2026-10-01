@@ -10,7 +10,7 @@ Before a live operation, confirm:
 
 - The source definition is merged into `master` and has passed the Season Configuration Validation workflow.
 - The `season-activation` SAM stack is deployed in the configured AWS region.
-- The protected GitHub `production` environment has the configuration-delivery role and T19 stack outputs documented in [`README.md`](README.md).
+- The protected GitHub `production` environment has `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` configured as a variable containing the dedicated role ARN, plus the T19 stack outputs documented in [`README.md`](README.md).
 - The API deployment has completed before production smoke checks are attempted.
 - A known, valid character is available for the progress smoke check.
 - Node.js 18 or newer is available for the production smoke script.
