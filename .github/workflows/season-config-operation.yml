@@ -23,6 +23,16 @@ on:
         description: ISO-8601 timestamp for a scheduled or timed operation
         required: false
         type: string
+    outputs:
+      revision_id:
+        description: Published immutable revision ID
+        value: ${{ jobs.operate.outputs.revision_id }}
+      revision_hash:
+        description: Published canonical revision hash
+        value: ${{ jobs.operate.outputs.revision_hash }}
+      revision_metadata:
+        description: Published season, revision, and hash metadata
+        value: ${{ jobs.operate.outputs.revision_metadata }}
 
 jobs:
   operate:
@@ -37,6 +47,10 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      revision_id: ${{ steps.execute.outputs.revision_id }}
+      revision_hash: ${{ steps.execute.outputs.revision_hash }}
+      revision_metadata: ${{ steps.execute.outputs.revision_metadata }}
     env:
       OPERATION: ${{ inputs.operation }}
       SOURCE_FILE: ${{ inputs.source_file }}
@@ -223,6 +237,14 @@ jobs:
               echo "publish did not produce a canonical revision hash." >&2
               exit 1
             fi
+
+            echo "revision_id=$REVISION_ID" >> "$GITHUB_OUTPUT"
+            echo "revision_hash=$revision_hash" >> "$GITHUB_OUTPUT"
+            {
+              echo "revision_metadata<<EOF"
+              printf '%s\t%s\t%s\n' "$SEASON_ID" "$REVISION_ID" "$revision_hash"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
 
             {
               echo
