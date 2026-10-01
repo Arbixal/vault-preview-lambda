@@ -116,6 +116,34 @@ public class S3SeasonRevisionProviderTests
     }
 
     [Fact]
+    public async Task Activate_RetryAfterPendingCleanupFailure_ClearsScheduledPointer()
+    {
+        FakeS3Client s3Client = new();
+        S3SeasonRevisionProvider provider = new(s3Client);
+        SeasonRevision first = SeasonRevision.Create("future-r1", _createConfiguration());
+        SeasonRevision second = SeasonRevision.Create(
+            "future-r2",
+            _createConfiguration() with { ShortLabel = "Future Revised" });
+
+        await provider.SaveRevision(first);
+        await provider.SaveRevision(second);
+        await provider.Activate("future-season", first.Id);
+        await provider.Schedule("future-season", second.Id, DateTimeOffset.UtcNow.AddHours(1));
+        s3Client.FailNextScheduledDelete = true;
+
+        await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+            provider.Activate("future-season", second.Id));
+
+        Assert.Equal(second.Id, (await provider.GetActiveRevision())?.Id);
+        Assert.True(s3Client.Contains("season-config/v1/scheduled.json"));
+
+        await provider.Activate("future-season", second.Id);
+
+        Assert.Equal(second.Id, (await provider.GetActiveRevision())?.Id);
+        Assert.False(s3Client.Contains("season-config/v1/scheduled.json"));
+    }
+
+    [Fact]
     public async Task GetScheduled_RejectsCorruptPendingPointer()
     {
         FakeS3Client s3Client = new();
@@ -165,6 +193,7 @@ public class S3SeasonRevisionProviderTests
         }
 
         public bool MutateBeforeNextConditionalPut { get; set; }
+        public bool FailNextScheduledDelete { get; set; }
 
         public bool Contains(string key) => _objects.ContainsKey(key);
 
@@ -225,6 +254,15 @@ public class S3SeasonRevisionProviderTests
             DeleteObjectRequest request,
             CancellationToken cancellationToken)
         {
+            if (FailNextScheduledDelete && request.Key == "season-config/v1/scheduled.json")
+            {
+                FailNextScheduledDelete = false;
+                throw new AmazonS3Exception("scheduled pointer delete failed")
+                {
+                    StatusCode = HttpStatusCode.InternalServerError
+                };
+            }
+
             _objects.Remove(request.Key);
             return Task.FromResult(new DeleteObjectResponse());
         }

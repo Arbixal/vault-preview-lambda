@@ -70,7 +70,7 @@ The functions expect these SSM parameters in the deployment region:
 
 The versioned endpoints allow the development and production Vault Preview origins by default (`http://localhost:3000` and `https://vault-preview.bixnpieces.com`). Set `VAULT_PREVIEW_CORS_ORIGINS` to a comma-separated allowlist when a deployment needs different origins.
 
-The committed season source format and configuration delivery boundary are documented in `season-config/README.md`. Source definitions live under `season-config/definitions/{seasonId}/{revisionId}.json`; the CLI and focused GitHub Actions workflows publish them as immutable S3 revisions and route activation through the dedicated activation Lambda.
+The committed season source format and configuration delivery boundary are documented in `season-config/README.md`. Source definitions live under `season-config/definitions/{seasonId}/{revisionId}.json`; the CLI and focused GitHub Actions workflows publish them as immutable S3 revisions and route activation through the dedicated activation Lambda. The production procedure is documented in [`season-config/RUNBOOK.md`](season-config/RUNBOOK.md).
 
 The API and scheduled-function SAM templates create Lambda execution roles with access limited to the `/Blizzard/*` parameter path and the cache bucket. The token function is deployed directly and therefore needs a separately created execution role.
 
@@ -226,7 +226,7 @@ In the repository's **Settings > Secrets and variables > Actions**, add:
 
 The workflow already grants `id-token: write` and uses `aws-actions/configure-aws-credentials`. Do not add `AWS_ACCESS_KEY_ID` or `AWS_SECRET_ACCESS_KEY` GitHub secrets for this workflow. Restrict the IAM trust policy to the exact repository and branch, and protect the `master` branch or deployment environment as appropriate.
 
-The season configuration workflow uses a separate protected `production` GitHub environment and must not reuse the broad deployment role. Configure environment secret `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` and the season delivery variables documented in [`season-config/README.md`](season-config/README.md). That role is limited to immutable revision objects, named EventBridge schedules, activation Lambda invocation, and passing the scheduler execution role; it cannot write the active season pointer.
+The season configuration workflow uses a separate protected `production` GitHub environment and must not reuse the broad deployment role. Configure environment variable `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` with the dedicated role ARN and the season delivery variables documented in [`season-config/README.md`](season-config/README.md). The ARN is not a credential and is intentionally a variable so the reusable workflow can resolve it. That role is limited to immutable revision objects, named EventBridge schedules, activation Lambda invocation, and passing the scheduler execution role; it cannot write the active season pointer.
 
 ## Deployment
 

@@ -120,7 +120,7 @@ Unknown future kinds are allowed by the format and are returned through the gene
 
 The item levels in this example are illustrative configuration values showing the complete shape. They must be replaced or approved by the API content owner before publishing a production revision.
 
-`definitions/midnight-s2/midnight-s2-r1.json` is a current-season workflow smoke-test candidate. Its season and Journal source IDs come from the current Season 2 fixtures; its 318 item-level mappings mirror the fixture baseline and still require content-owner approval before production publishing.
+`definitions/midnight-s2/midnight-s2-r1.json` is the approved current-season workflow smoke-test definition. Its season and Journal source IDs come from the current Season 2 fixtures; its 318 item-level mappings mirror the fixture baseline. It is not active until it has been published and activated through the delivery workflow.
 
 ## Generated Revision Artifact
 
@@ -172,7 +172,7 @@ season-config/v1/scheduled.json
 
 ## Delivery Inputs
 
-The CLI and GitHub Actions workflow should accept these inputs rather than embedding deployment values in source definitions:
+The CLI and GitHub Actions workflows should accept these inputs rather than embedding deployment values in source definitions:
 
 | Input | Purpose |
 | --- | --- |
@@ -185,7 +185,7 @@ The CLI and GitHub Actions workflow should accept these inputs rather than embed
 | `VAULT_PREVIEW_SCHEDULER_DEAD_LETTER_QUEUE_ARN` | CloudFormation `SchedulerDeadLetterQueueArn` output used for failed scheduled invocations. |
 | `VAULT_PREVIEW_CONFIG_ENVIRONMENT` | Logical environment name used by protected GitHub environments and workflow output. |
 | `AWS_ROLE_TO_ASSUME` | GitHub OIDC application deployment role used by the Lambda deployment workflow. |
-| `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC configuration-delivery role used by the season workflow. |
+| `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC configuration-delivery role used by the season workflow. This is an environment variable because the value is a role ARN, not a credential. |
 
 The configuration-delivery role may publish revision objects and manage named schedules, but active-state writes remain restricted to the activation Lambda role.
 
@@ -202,11 +202,17 @@ The GitHub Actions delivery is split into focused workflows:
 
 The five mutating workflows call `.github/workflows/season-config-operation.yml` for their shared implementation. Each operation must be dispatched from `master`, uses the protected GitHub `production` environment, and requires environment approval before AWS authentication. They share the existing configuration-delivery role and a non-canceling concurrency queue, so operations remain serialized across workflows.
 
+The operator procedure is documented in [`RUNBOOK.md`](RUNBOOK.md). The
+production smoke check is [`smoke-check.mjs`](smoke-check.mjs); it verifies
+active app configuration, ETag revalidation, and matching character revision
+metadata through the progress endpoint's read-only mode without modifying AWS
+state or initializing a Delve baseline.
+
 Configure these values on the `production` environment:
 
 | Type | Name | Purpose |
 | --- | --- | --- |
-| Secret | `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC role for season revision delivery; do not reuse the broad application deployment role. |
+| Variable | `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` | Dedicated GitHub OIDC role ARN for season revision delivery; do not reuse the broad application deployment role. |
 | Variable | `AWS_REGION` | Region containing the data bucket and activation resources. |
 | Variable | `VAULT_PREVIEW_DATA_BUCKET` | Existing durable data bucket. |
 | Variable | `VAULT_PREVIEW_CONFIG_ENVIRONMENT` | Must be `production` for this workflow. |

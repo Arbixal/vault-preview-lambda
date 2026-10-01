@@ -40,6 +40,9 @@ jobs:
       - name: Run configuration and calculation tests
         run: dotnet test VaultPreviewLambda.sln --configuration Release --no-build --no-restore
 
+      - name: Check production smoke script syntax
+        run: node --check season-config/smoke-check.mjs
+
       - name: Validate committed definitions
         shell: bash
         run: |

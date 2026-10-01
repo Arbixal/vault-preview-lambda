@@ -19,7 +19,8 @@ public sealed class VaultProgressCalculator
         IReadOnlyList<BlizzardJournalMetadata> journalMetadata,
         RaiderIoProfileResponse? raiderIoProfile,
         IReadOnlyDictionary<int, int>? delveStatistics,
-        ISeasonAwareDelveBaselineProvider delveBaselineProvider)
+        ISeasonAwareDelveBaselineProvider delveBaselineProvider,
+        bool readOnly = false)
     {
         ArgumentNullException.ThrowIfNull(revision);
         ArgumentNullException.ThrowIfNull(journalMetadata);
@@ -40,7 +41,8 @@ public sealed class VaultProgressCalculator
                     character,
                     revision,
                     delveStatistics,
-                    delveBaselineProvider),
+                    delveBaselineProvider,
+                    readOnly),
                 _ => _createUnsupportedSection(activity)
             };
             sections.Add(section);
@@ -204,7 +206,8 @@ public sealed class VaultProgressCalculator
         string character,
         SeasonRevision revision,
         IReadOnlyDictionary<int, int>? statistics,
-        ISeasonAwareDelveBaselineProvider baselineProvider)
+        ISeasonAwareDelveBaselineProvider baselineProvider,
+        bool readOnly)
     {
         if (statistics == null)
             return _createUnavailableSection(activity, "Delve data is unavailable.");
@@ -229,7 +232,7 @@ public sealed class VaultProgressCalculator
                 0,
                 statistics.GetValueOrDefault(level) -
                 (baselineMatches ? baseline!.Completed.GetValueOrDefault(level) : statistics.GetValueOrDefault(level))));
-        if (!baselineMatches)
+        if (!baselineMatches && !readOnly)
         {
             await baselineProvider.SaveBaseline(
                 region,
