@@ -191,10 +191,16 @@ The configuration-delivery role may publish revision objects and manage named sc
 
 ## GitHub Actions Delivery
 
-`.github/workflows/season-config.yml` has two paths:
+The GitHub Actions delivery is split into focused workflows:
 
-- Pull requests validate every committed definition, run the solution tests, compute each deterministic revision hash, and publish the source/revision/hash table in the workflow summary. This path does not request AWS credentials or write runtime state.
-- A manual dispatch from `master` runs one of `publish`, `activate`, `schedule`, `rollback`, or `cancel`. The job is bound to the protected GitHub `production` environment, so environment reviewers approve all mutating operations before AWS authentication. Mutating runs use a non-canceling concurrency queue with up to 100 pending runs; admitted runs are processed one at a time in GitHub's FIFO wait order.
+- `.github/workflows/season-config-validation.yml` validates every committed definition on pull requests, runs the solution tests, computes each deterministic revision hash, and publishes the source/revision/hash table in the workflow summary. It does not request AWS credentials or write runtime state.
+- `.github/workflows/season-config-publish.yml` publishes one tracked source definition and exposes only source, season, and revision inputs.
+- `.github/workflows/season-config-activate.yml` performs immediate activation and exposes season, revision, and an optional activation timestamp.
+- `.github/workflows/season-config-schedule.yml` schedules a future activation and exposes season, revision, and activation timestamp inputs.
+- `.github/workflows/season-config-rollback.yml` restores a prior revision and exposes season, revision, and an optional activation timestamp.
+- `.github/workflows/season-config-cancel.yml` cancels the pending schedule and requires no inputs.
+
+The five mutating workflows call `.github/workflows/season-config-operation.yml` for their shared implementation. Each operation must be dispatched from `master`, uses the protected GitHub `production` environment, and requires environment approval before AWS authentication. They share the existing configuration-delivery role and a non-canceling concurrency queue, so operations remain serialized across workflows.
 
 Configure these values on the `production` environment:
 

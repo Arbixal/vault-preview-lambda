@@ -1,0 +1,30 @@
+name: Season Configuration Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      season_id:
+        description: Public season ID
+        required: true
+        type: string
+      revision_id:
+        description: Immutable prior revision to restore
+        required: true
+        type: string
+      activation_at:
+        description: Optional ISO-8601 activation timestamp; omit for immediate rollback
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  rollback:
+    uses: ./.github/workflows/season-config-operation.yml
+    with:
+      operation: rollback
+      season_id: ${{ inputs.season_id }}
+      revision_id: ${{ inputs.revision_id }}
+      activation_at: ${{ inputs.activation_at }}

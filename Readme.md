@@ -59,7 +59,7 @@ The active season configuration uses the same bucket as its durable source of tr
 - `season-config/v1/active.json` points to the globally active season revision and its activation timestamp.
 - `season-config/v1/scheduled.json` optionally holds pending activation intent and is promoted by the activation workflow, not by API reads.
 
-Revision documents are validated against the season configuration rules and their lowercase SHA-256 content hash every time they are read. `S3SeasonRevisionProvider.SaveRevision` writes a draft only when the revision key does not already exist; `Activate` and `Rollback` replace the active pointer after validating the selected immutable document. `Schedule` records pending intent and `CancelSchedule` clears it; a future activation Lambda and EventBridge Scheduler will own the promotion step.
+Revision documents are validated against the season configuration rules and their lowercase SHA-256 content hash every time they are read. `S3SeasonRevisionProvider.SaveRevision` writes a draft only when the revision key does not already exist; `Activate` and `Rollback` replace the active pointer after validating the selected immutable document. `Schedule` records pending intent and `CancelSchedule` clears it; the dedicated activation Lambda and EventBridge Scheduler own the promotion step.
 
 The functions expect these SSM parameters in the deployment region:
 
@@ -70,7 +70,7 @@ The functions expect these SSM parameters in the deployment region:
 
 The versioned endpoints allow the development and production Vault Preview origins by default (`http://localhost:3000` and `https://vault-preview.bixnpieces.com`). Set `VAULT_PREVIEW_CORS_ORIGINS` to a comma-separated allowlist when a deployment needs different origins.
 
-The committed season source format and configuration delivery boundary are documented in `season-config/README.md`. Source definitions live under `season-config/definitions/{seasonId}/{revisionId}.json`; the future CLI and GitHub Actions workflow will publish them as immutable S3 revisions and route activation through the dedicated activation Lambda.
+The committed season source format and configuration delivery boundary are documented in `season-config/README.md`. Source definitions live under `season-config/definitions/{seasonId}/{revisionId}.json`; the CLI and focused GitHub Actions workflows publish them as immutable S3 revisions and route activation through the dedicated activation Lambda.
 
 The API and scheduled-function SAM templates create Lambda execution roles with access limited to the `/Blizzard/*` parameter path and the cache bucket. The token function is deployed directly and therefore needs a separately created execution role.
 

@@ -1,0 +1,14 @@
+name: Season Configuration Cancel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  cancel:
+    uses: ./.github/workflows/season-config-operation.yml
+    with:
+      operation: cancel
