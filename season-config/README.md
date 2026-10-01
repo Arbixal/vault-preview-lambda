@@ -205,7 +205,8 @@ The five mutating workflows call `.github/workflows/season-config-operation.yml`
 The operator procedure is documented in [`RUNBOOK.md`](RUNBOOK.md). The
 production smoke check is [`smoke-check.mjs`](smoke-check.mjs); it verifies
 active app configuration, ETag revalidation, and matching character revision
-metadata without modifying AWS state.
+metadata through the progress endpoint's read-only mode without modifying AWS
+state or initializing a Delve baseline.
 
 Configure these values on the `production` environment:
 

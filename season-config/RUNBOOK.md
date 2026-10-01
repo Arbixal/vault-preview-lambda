@@ -144,6 +144,7 @@ check against the deployed API. It verifies:
 - Conditional app-config revalidation returns `304 Not Modified`.
 - The character endpoint returns schema version 1.
 - The character response season ID, revision, and revision hash match app-config.
+- The character request uses `readOnly=true`, so it does not create or update a Delve baseline.
 
 Set the API base URL without a trailing slash. The realm and character must be
 valid production values:

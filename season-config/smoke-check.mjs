@@ -100,7 +100,7 @@ async function main() {
   const region = process.env.VAULT_PREVIEW_REGION;
   const realm = process.env.VAULT_PREVIEW_REALM;
   const character = process.env.VAULT_PREVIEW_CHARACTER;
-  const progressPath = `/v1/vault-progress/${encodeURIComponent(region)}/${encodeURIComponent(realm)}/${encodeURIComponent(character)}`;
+  const progressPath = `/v1/vault-progress/${encodeURIComponent(region)}/${encodeURIComponent(realm)}/${encodeURIComponent(character)}?readOnly=true`;
   const progressResult = await getJson(baseUrl, progressPath, requestHeaders);
   if (progressResult.response.status !== 200) {
     fail(`${progressPath} returned HTTP ${progressResult.response.status}; expected 200.`);

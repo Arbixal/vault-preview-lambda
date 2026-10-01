@@ -124,6 +124,28 @@ public class VersionedApiEndpointTests
     }
 
     [Fact]
+    public async Task GetVaultProgress_ReadOnlyDoesNotSaveDelveBaseline()
+    {
+        SeasonRevision revision = SeasonRevision.Create("future-r1", _createDelveConfiguration());
+        FakeDelveBaselineProvider baselineProvider = new();
+        Function function = _createFunction(
+            revision,
+            new FakeBlizzardApiHandler(delveStatistics: new Dictionary<int, int> { [1] = 1 }),
+            baselineProvider);
+
+        IHttpResult result = await function.GetVaultProgress(
+            "us",
+            "realm",
+            "character",
+            string.Empty,
+            "http://localhost:3000",
+            readOnly: true);
+
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode);
+        Assert.Equal(0, baselineProvider.SaveCount);
+    }
+
+    [Fact]
     public async Task GetVaultProgress_ReturnsStructuredCharacterNotFoundError()
     {
         SeasonRevision revision = SeasonRevision.Create("future-r1", _createDelveConfiguration());
@@ -180,9 +202,11 @@ public class VersionedApiEndpointTests
 
     private static Function _createFunction(
         SeasonRevision revision,
-        FakeBlizzardApiHandler? blizzard = null)
+        FakeBlizzardApiHandler? blizzard = null,
+        FakeDelveBaselineProvider? baselineProvider = null)
     {
         blizzard ??= new FakeBlizzardApiHandler();
+        baselineProvider ??= new FakeDelveBaselineProvider();
         return new Function(
             blizzard,
             new FakeRaiderIoHandler(),
@@ -195,7 +219,7 @@ public class VersionedApiEndpointTests
                 new BlizzardJournalMetadataProvider(blizzard),
                 new VaultProgressCalculator(),
                 new FakeSeasonRevisionProvider(revision),
-                new FakeDelveBaselineProvider()));
+                baselineProvider));
     }
 
     private static SeasonConfiguration _createConfiguration()
@@ -301,11 +325,16 @@ public class VersionedApiEndpointTests
 
     private sealed class FakeDelveBaselineProvider : ISeasonAwareDelveBaselineProvider
     {
+        public int SaveCount { get; private set; }
+
         public Task<DelveBaseline?> GetBaseline(string region, string realm, string character) =>
             Task.FromResult<DelveBaseline?>(null);
 
-        public Task SaveBaseline(string region, string realm, string character, DelveBaseline baseline) =>
-            Task.CompletedTask;
+        public Task SaveBaseline(string region, string realm, string character, DelveBaseline baseline)
+        {
+            SaveCount++;
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeRaiderIoHandler : IRaiderIoHandler
@@ -314,8 +343,13 @@ public class VersionedApiEndpointTests
             Task.FromResult(new RaiderIoProfileResponse());
     }
 
-    private sealed class FakeBlizzardApiHandler(HttpStatusCode? statisticsStatusCode = null) : IBlizzardApiHandler
+    private sealed class FakeBlizzardApiHandler(
+        HttpStatusCode? statisticsStatusCode = null,
+        IReadOnlyDictionary<int, int>? delveStatistics = null) : IBlizzardApiHandler
     {
+        private readonly IReadOnlyDictionary<int, int> _delveStatistics =
+            delveStatistics ?? new Dictionary<int, int>();
+
         public Task Connect() => Task.CompletedTask;
 
         public Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character) =>
@@ -339,7 +373,7 @@ public class VersionedApiEndpointTests
                     statisticsStatusCode.Value);
             }
 
-            return Task.FromResult(new Dictionary<int, int>());
+            return Task.FromResult(new Dictionary<int, int>(_delveStatistics));
         }
     }
 

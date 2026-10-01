@@ -20,7 +20,8 @@ public sealed class VersionedProgressService(
         string region,
         string realm,
         string character,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool readOnly = false)
     {
         SeasonRevision? revision = await seasonRevisionProvider.GetActiveRevision(cancellationToken);
         if (revision == null)
@@ -80,7 +81,8 @@ public sealed class VersionedProgressService(
             journalMetadata,
             raiderIoProfile,
             delveStatistics,
-            delveBaselineProvider);
+            delveBaselineProvider,
+            readOnly);
     }
 
     private static DateTimeOffset _truncateToMinute(DateTimeOffset value) =>

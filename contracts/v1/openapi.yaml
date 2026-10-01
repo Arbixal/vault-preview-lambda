@@ -53,6 +53,7 @@ paths:
         - $ref: '#/components/parameters/Region'
         - $ref: '#/components/parameters/Realm'
         - $ref: '#/components/parameters/Character'
+        - $ref: '#/components/parameters/ReadOnlyProgress'
       responses:
         '200':
           description: The character's calculated progress for one season snapshot.
@@ -126,6 +127,14 @@ components:
         minLength: 1
         examples:
           - bixposter
+    ReadOnlyProgress:
+      name: readOnly
+      in: query
+      required: false
+      description: When true, calculate progress without creating or updating a season-aware Delve baseline. Intended for production smoke checks.
+      schema:
+        type: boolean
+        default: false
   responses:
     BadRequest:
       description: Invalid request. The error code is `INVALID_REQUEST`.

@@ -116,7 +116,8 @@ public class Function
         string realm,
         string character,
         [FromHeader(Name = "If-None-Match")] string ifNoneMatch,
-        [FromHeader(Name = "Origin")] string origin)
+        [FromHeader(Name = "Origin")] string origin,
+        [FromQuery(Name = "readOnly")] bool readOnly = false)
     {
         if (!_isValidRequest(region, realm, character))
         {
@@ -141,7 +142,8 @@ public class Function
             VaultProgressResponse? response = await _versionedProgressService.Calculate(
                 region.Trim().ToLowerInvariant(),
                 realm.Trim(),
-                character.Trim());
+                character.Trim(),
+                readOnly: readOnly);
             if (response == null)
             {
                 return _createError(
