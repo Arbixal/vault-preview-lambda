@@ -44,12 +44,20 @@ public class VaultCacheHandler(IAmazonS3 s3Client) : IVaultCacheHandler
         {
             ListObjectsResponse listResponse = await s3Client.ListObjectsAsync(new ListObjectsRequest()
             {
-                BucketName = _BUCKET_NAME
+                BucketName = _BUCKET_NAME,
+                Delimiter = "/"
             });
 
             foreach (S3Object aFile in listResponse.S3Objects ?? [])
             {
-                string[] characterParts = aFile.Key.Replace(".json", "").Split("-");
+                if (string.IsNullOrWhiteSpace(aFile.Key) ||
+                    aFile.Key.Contains('/') ||
+                    !aFile.Key.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string[] characterParts = aFile.Key[..^".json".Length].Split("-");
                 if (characterParts.Length != 3)
                     continue;
                 
