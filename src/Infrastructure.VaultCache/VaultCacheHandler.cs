@@ -42,34 +42,60 @@ public class VaultCacheHandler(IAmazonS3 s3Client) : IVaultCacheHandler
         IList<CharacterData> returnData = new List<CharacterData>();
         try
         {
-            ListObjectsResponse listResponse = await s3Client.ListObjectsAsync(new ListObjectsRequest()
+            string? continuationToken = null;
+            do
             {
-                BucketName = _BUCKET_NAME,
-                Delimiter = "/"
-            });
-
-            foreach (S3Object aFile in listResponse.S3Objects ?? [])
-            {
-                if (string.IsNullOrWhiteSpace(aFile.Key) ||
-                    aFile.Key.Contains('/') ||
-                    !aFile.Key.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                ListObjectsV2Response listResponse = await s3Client.ListObjectsV2Async(new ListObjectsV2Request()
                 {
-                    continue;
+                    BucketName = _BUCKET_NAME,
+                    Delimiter = "/",
+                    ContinuationToken = continuationToken
+                });
+
+                foreach (S3Object aFile in listResponse.S3Objects ?? [])
+                {
+                    if (string.IsNullOrWhiteSpace(aFile.Key) ||
+                        aFile.Key.Contains('/') ||
+                        !aFile.Key.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        using GetObjectResponse objectResponse = await s3Client.GetObjectAsync(new GetObjectRequest()
+                        {
+                            BucketName = _BUCKET_NAME,
+                            Key = aFile.Key
+                        });
+
+                        CharacterData? aCharacter = await JsonSerializer.DeserializeAsync<CharacterData>(
+                            objectResponse.ResponseStream);
+                        if (aCharacter?.IsValid != true)
+                            continue;
+
+                        aCharacter.LastUpdatedTimestamp = aFile.LastModified.HasValue
+                            ? new DateTimeOffset(aFile.LastModified.Value).ToUnixTimeMilliseconds()
+                            : 0;
+                        returnData.Add(aCharacter);
+                    }
+                    catch (AmazonS3Exception e)
+                    {
+                        Console.WriteLine(e);
+                    }
+                    catch (JsonException e)
+                    {
+                        Console.WriteLine(e);
+                    }
                 }
 
-                string[] characterParts = aFile.Key[..^".json".Length].Split("-");
-                if (characterParts.Length != 3)
-                    continue;
-                
-                CharacterData aCharacter = new CharacterData(characterParts[2], characterParts[1], characterParts[0])
-                    {
-                        LastUpdatedTimestamp = aFile.LastModified.HasValue
-                            ? new DateTimeOffset(aFile.LastModified.Value).ToUnixTimeMilliseconds()
-                            : 0
-                    };
+                if (listResponse.IsTruncated != true)
+                    break;
 
-                returnData.Add(aCharacter);
-            }
+                continuationToken = listResponse.NextContinuationToken;
+                if (string.IsNullOrEmpty(continuationToken))
+                    throw new InvalidOperationException("S3 returned a truncated character listing without a continuation token.");
+            } while (true);
         }
         catch (AmazonS3Exception e)
         {
