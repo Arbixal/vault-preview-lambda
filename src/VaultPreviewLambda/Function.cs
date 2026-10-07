@@ -239,6 +239,40 @@ public class Function
         {
             throw;
         }
+        catch (VersionedProgressCalculationException exception) when (
+            exception.InnerException is HttpRequestException { StatusCode: HttpStatusCode.NotFound })
+        {
+            IHttpResult result = _createError(
+                HttpStatusCode.NotFound,
+                "CHARACTER_NOT_FOUND",
+                "Character data is not available.",
+                origin);
+            _recordProgressFailureTelemetry("character_not_found", (int)HttpStatusCode.NotFound, exception.Revision);
+            return result;
+        }
+        catch (VersionedProgressCalculationException exception) when (exception.InnerException is HttpRequestException)
+        {
+            Console.WriteLine(
+                $"Character progress upstream request failed: {exception.InnerException?.GetType().Name ?? exception.GetType().Name}");
+            IHttpResult result = _createError(
+                HttpStatusCode.ServiceUnavailable,
+                "UPSTREAM_UNAVAILABLE",
+                "Required upstream data is unavailable.",
+                origin);
+            _recordProgressFailureTelemetry("upstream", (int)HttpStatusCode.ServiceUnavailable, exception.Revision);
+            return result;
+        }
+        catch (VersionedProgressCalculationException exception)
+        {
+            Console.WriteLine($"Character progress calculation failed: {exception.InnerException?.GetType().Name}");
+            IHttpResult result = _createError(
+                HttpStatusCode.ServiceUnavailable,
+                "UPSTREAM_UNAVAILABLE",
+                "Required upstream data is unavailable.",
+                origin);
+            _recordProgressFailureTelemetry("calculation", (int)HttpStatusCode.ServiceUnavailable, exception.Revision);
+            return result;
+        }
         catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
         {
             IHttpResult result = _createError(
@@ -542,6 +576,22 @@ public class Function
             response.Season.RevisionHash,
             freshness,
             failureType));
+    }
+
+    private void _recordProgressFailureTelemetry(
+        string failureType,
+        int statusCode,
+        SeasonRevision revision)
+    {
+        _recordTelemetry(new ApiTelemetryEvent(
+            "GET /v1/vault-progress",
+            "error",
+            statusCode,
+            1,
+            revision.Configuration.Id,
+            revision.Id,
+            revision.RevisionHash,
+            FailureType: failureType));
     }
 
     private void _recordTelemetry(ApiTelemetryEvent telemetryEvent)

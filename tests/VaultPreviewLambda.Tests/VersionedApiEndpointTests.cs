@@ -33,6 +33,7 @@ public class VersionedApiEndpointTests
 
         using JsonDocument body = _readBody(response);
         JsonElement root = body.RootElement;
+        OpenApiContractValidator.AssertValid(response.Body!, "AppConfigResponse");
         Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("future-season", root.GetProperty("activeSeason").GetProperty("id").GetString());
         Assert.Equal("future-r1", root.GetProperty("activeSeason").GetProperty("revision").GetString());
@@ -129,6 +130,7 @@ public class VersionedApiEndpointTests
         Assert.StartsWith("\"sha256:", response.Headers["etag"]);
         using JsonDocument body = _readBody(response);
         JsonElement root = body.RootElement;
+        OpenApiContractValidator.AssertValid(response.Body!, "CharacterProgressResponse");
         Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("character", root.GetProperty("character").GetProperty("name").GetString());
         Assert.Equal("future-season", root.GetProperty("season").GetProperty("id").GetString());
@@ -225,6 +227,8 @@ public class VersionedApiEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Single(telemetry.Events);
         Assert.Equal("character_not_found", telemetry.Events[0].FailureType);
+        Assert.Equal(revision.Id, telemetry.Events[0].Revision);
+        Assert.Equal(revision.RevisionHash, telemetry.Events[0].RevisionHash);
         string serializedTelemetry = JsonSerializer.Serialize(telemetry.Events[0]);
         Assert.DoesNotContain("\"Name\"", serializedTelemetry, StringComparison.Ordinal);
         Assert.DoesNotContain("realm", serializedTelemetry, StringComparison.OrdinalIgnoreCase);
@@ -294,6 +298,8 @@ public class VersionedApiEndpointTests
         Assert.Equal("UPSTREAM_UNAVAILABLE", body.RootElement.GetProperty("error").GetProperty("code").GetString());
         Assert.Single(telemetry.Events);
         Assert.Equal("upstream", telemetry.Events[0].FailureType);
+        Assert.Equal(revision.Id, telemetry.Events[0].Revision);
+        Assert.Equal(revision.RevisionHash, telemetry.Events[0].RevisionHash);
     }
 
     [Fact]
@@ -316,6 +322,8 @@ public class VersionedApiEndpointTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Single(telemetry.Events);
         Assert.Equal("calculation", telemetry.Events[0].FailureType);
+        Assert.Equal(revision.Id, telemetry.Events[0].Revision);
+        Assert.Equal(revision.RevisionHash, telemetry.Events[0].RevisionHash);
     }
 
     [Fact]
