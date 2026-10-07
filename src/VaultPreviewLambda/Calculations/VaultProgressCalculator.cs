@@ -99,12 +99,14 @@ public sealed class VaultProgressCalculator
             if (!metadataById.TryGetValue(instanceId, out BlizzardJournalMetadata? metadata))
                 continue;
 
-            IList<BlizzardMode> modes = _getModes(encounterResponse, instanceId).ToList();
+            IReadOnlyList<BlizzardMode> modes = _getModes(encounterResponse, instanceId).ToList();
             foreach (BlizzardJournalEncounter encounter in metadata.Instance.Encounters)
             {
-                List<ProgressDimension> dimensions = modes
-                    .Select((mode, index) => _getDifficultyProgress(mode, encounter.Id, index, resetAt))
-                    .ToList();
+                List<ProgressDimension> dimensions = _getDifficultyProgress(
+                    activity,
+                    modes,
+                    encounter.Id,
+                    resetAt);
                 bool? completed = dimensions.Count == 0
                     ? null
                     : dimensions.Any(x => x.Completed == true);
@@ -411,26 +413,71 @@ public sealed class VaultProgressCalculator
                ?? [];
     }
 
-    private static ProgressDimension _getDifficultyProgress(
-        BlizzardMode mode,
+    private static List<ProgressDimension> _getDifficultyProgress(
+        SeasonActivityDefinition activity,
+        IReadOnlyList<BlizzardMode> modes,
         long encounterId,
-        int index,
         DateTimeOffset resetAt)
     {
-        BlizzardEncounter? encounter = mode.Progress.Encounters
-            .FirstOrDefault(x => x.Encounter.Id == encounterId);
-        bool completed = encounter != null && encounter.LastKillTimestamp > resetAt.ToUnixTimeMilliseconds();
-        string id = string.IsNullOrWhiteSpace(mode.Difficulty.Type)
-            ? $"difficulty-{index + 1}"
-            : mode.Difficulty.Type.ToLowerInvariant();
+        if (modes.Count == 0)
+            return [];
 
-        return new ProgressDimension
+        Dictionary<string, List<BlizzardMode>> modesByDifficulty = modes
+            .Select((mode, index) => new { mode, id = _getDifficultyId(mode, index) })
+            .GroupBy(x => x.id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(x => x.mode).ToList(),
+                StringComparer.OrdinalIgnoreCase);
+
+        IEnumerable<string> configuredDimensions = activity.ProgressRules
+            .Where(rule => !string.IsNullOrWhiteSpace(rule.Dimension))
+            .Select(rule => rule.Dimension!.Trim());
+        IEnumerable<string> dimensionIds = configuredDimensions
+            .Concat(modesByDifficulty.Keys)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        return dimensionIds.Select(id =>
         {
-            Id = id,
-            Label = string.IsNullOrWhiteSpace(mode.Difficulty.Name) ? id : mode.Difficulty.Name,
-            State = completed ? "complete" : "incomplete",
-            Completed = completed
-        };
+            modesByDifficulty.TryGetValue(id, out List<BlizzardMode>? matchingModes);
+            bool completed = matchingModes?.Any(mode => mode.Progress.Encounters.Any(encounter =>
+                encounter.Encounter.Id == encounterId &&
+                encounter.LastKillTimestamp > resetAt.ToUnixTimeMilliseconds())) == true;
+            string label = matchingModes?
+                .Select(mode => mode.Difficulty.Name)
+                .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name))
+                ?? _humanizeDifficulty(id);
+
+            return new ProgressDimension
+            {
+                Id = id,
+                Label = label,
+                State = completed ? "complete" : "incomplete",
+                Completed = completed
+            };
+        }).ToList();
+    }
+
+    private static string _getDifficultyId(BlizzardMode mode, int index)
+    {
+        if (!string.IsNullOrWhiteSpace(mode.Difficulty.Type))
+            return mode.Difficulty.Type.Trim().ToLowerInvariant();
+
+        if (!string.IsNullOrWhiteSpace(mode.Difficulty.Name))
+            return mode.Difficulty.Name.Trim().ToLowerInvariant().Replace(' ', '-');
+
+        return $"difficulty-{index + 1}";
+    }
+
+    private static string _humanizeDifficulty(string value)
+    {
+        if (string.Equals(value, "lfr", StringComparison.OrdinalIgnoreCase))
+            return "LFR";
+
+        return string.Join(
+            " ",
+            value.Split(['-', '_'], StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => char.ToUpperInvariant(part[0]) + part[1..]));
     }
 
     private static string _trimClassName(string className)

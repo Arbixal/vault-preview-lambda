@@ -128,6 +128,128 @@ public class NormalizedProgressCalculatorTests
     }
 
     [Fact]
+    public async Task Calculate_DeduplicatesRaidModesAndIncludesConfiguredMissingDifficulties()
+    {
+        SeasonRevision revision = SeasonRevision.Create(
+            "midnight-s2-r1",
+            new SeasonConfiguration(
+                "midnight-s2",
+                "Midnight Season 2",
+                "Season 2",
+                "Midnight",
+                18,
+                [new SeasonActivityDefinition(
+                    "raid",
+                    "raid",
+                    "Raids",
+                    null,
+                    0,
+                    [new SeasonSlotDefinition("raid-slot-1", "bosses", 1, "1 boss", 1, new(318, "epic"))],
+                    ["wow:journal-instance:1320"])
+                {
+                    ProgressRules =
+                    [
+                        new SeasonProgressRule("raid-lfr", "lfr", 1, 292, "rare"),
+                        new SeasonProgressRule("raid-normal", "normal", 1, 305, "epic"),
+                        new SeasonProgressRule("raid-heroic", "heroic", 1, 318, "legendary"),
+                        new SeasonProgressRule("raid-mythic", "mythic", 1, 344, "legendary")
+                    ]
+                }]));
+        DateTimeOffset resetAt = DateTimeOffset.UtcNow.AddHours(-1);
+
+        BlizzardMode CreateMode(string type, string name, bool completed) => new()
+        {
+            Difficulty = new BlizzardType { Type = type, Name = name },
+            Progress = new BlizzardProgress
+            {
+                Encounters =
+                [
+                    new BlizzardEncounter
+                    {
+                        Encounter = new BlizzardBase { Id = 2888 },
+                        LastKillTimestamp = completed ? resetAt.ToUnixTimeMilliseconds() + 1 : 0
+                    }
+                ]
+            }
+        };
+
+        BlizzardInstance CreateInstance(bool heroicCompleted) => new()
+        {
+            Instance = new BlizzardBase { Id = 1320 },
+            Modes =
+            [
+                CreateMode("lfr", "LFR", false),
+                CreateMode("normal", "Normal", false),
+                CreateMode("heroic", "Heroic", heroicCompleted)
+            ]
+        };
+
+        VaultProgressResponse response = await new VaultProgressCalculator().Calculate(
+            "us",
+            "nagrand",
+            "bixposter",
+            revision,
+            resetAt,
+            DateTimeOffset.UtcNow,
+            new BlizzardEncounterResponse
+            {
+                Expansions =
+                [
+                    new BlizzardExpansion { Instances = [CreateInstance(true)] },
+                    new BlizzardExpansion { Instances = [CreateInstance(false)] }
+                ]
+            },
+            [new BlizzardJournalMetadata(
+                new BlizzardJournalInstance
+                {
+                    Id = 1320,
+                    Name = "The Venomous Abyss",
+                    Encounters = [new BlizzardJournalEncounter { Id = 2888, Name = "Nek'zali the Soulcoiler" }]
+                },
+                false,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddDays(1),
+                DateTimeOffset.UtcNow.AddDays(7))],
+            null,
+            null,
+            new FakeDelveBaselineProvider(null));
+
+        ProgressDimension[] dimensions = response.Sections[0].Slots[0].Items[0].Progress!.Dimensions.ToArray();
+
+        Assert.Equal(["lfr", "normal", "heroic", "mythic"], dimensions.Select(x => x.Id));
+        Assert.Equal(["LFR", "Normal", "Heroic", "Mythic"], dimensions.Select(x => x.Label));
+        Assert.True(dimensions.Single(x => x.Id == "heroic").Completed);
+        Assert.False(dimensions.Single(x => x.Id == "mythic").Completed);
+
+        VaultProgressResponse noModesResponse = await new VaultProgressCalculator().Calculate(
+            "us",
+            "nagrand",
+            "bixposter",
+            revision,
+            resetAt,
+            DateTimeOffset.UtcNow,
+            new BlizzardEncounterResponse(),
+            [new BlizzardJournalMetadata(
+                new BlizzardJournalInstance
+                {
+                    Id = 1320,
+                    Name = "The Venomous Abyss",
+                    Encounters = [new BlizzardJournalEncounter { Id = 2888, Name = "Nek'zali the Soulcoiler" }]
+                },
+                false,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddDays(1),
+                DateTimeOffset.UtcNow.AddDays(7))],
+            null,
+            null,
+            new FakeDelveBaselineProvider(null));
+
+        ProgressItem noModesItem = noModesResponse.Sections[0].Slots[0].Items[0];
+        Assert.Equal("unknown", noModesItem.State);
+        Assert.Empty(noModesItem.Progress!.Dimensions);
+    }
+
+    [Fact]
     public async Task Calculate_UsesFreshBaselineIdentityAndMarksUnavailableInputs()
     {
         SeasonRevision revision = SeasonRevision.Create(
