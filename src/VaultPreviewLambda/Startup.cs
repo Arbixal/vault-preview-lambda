@@ -22,6 +22,7 @@ public class Startup
         services.AddSingleton<IRaiderIoHandler, RaiderIoHandler>();
         services.AddSingleton<ISecretHandler, SecretHandler>();
         services.AddSingleton<IVaultCacheHandler, VaultCacheHandler>();
+        services.AddSingleton<IApiTelemetry, ConsoleApiTelemetry>();
         services.AddVaultCache();
         services.AddHttpClient();
     }

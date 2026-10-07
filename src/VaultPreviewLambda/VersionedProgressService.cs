@@ -27,6 +27,35 @@ public sealed class VersionedProgressService(
         if (revision == null)
             return null;
 
+        try
+        {
+            return await _calculate(
+                region,
+                realm,
+                character,
+                revision,
+                cancellationToken,
+                readOnly);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw new VersionedProgressCalculationException(revision, exception);
+        }
+    }
+
+    private async Task<VaultProgressResponse> _calculate(
+        string region,
+        string realm,
+        string character,
+        SeasonRevision revision,
+        CancellationToken cancellationToken,
+        bool readOnly)
+    {
+
         IReadOnlyList<SeasonActivityDefinition> activities = revision.Configuration.Activities;
         bool requiresBlizzard = activities.Any(activity =>
             string.Equals(activity.Kind, "raid", StringComparison.OrdinalIgnoreCase) ||
@@ -87,4 +116,15 @@ public sealed class VersionedProgressService(
 
     private static DateTimeOffset _truncateToMinute(DateTimeOffset value) =>
         new(value.Year, value.Month, value.Day, value.Hour, value.Minute, 0, TimeSpan.Zero);
+}
+
+public sealed class VersionedProgressCalculationException : Exception
+{
+    public VersionedProgressCalculationException(SeasonRevision revision, Exception innerException)
+        : base("Versioned progress calculation failed.", innerException)
+    {
+        Revision = revision;
+    }
+
+    public SeasonRevision Revision { get; }
 }

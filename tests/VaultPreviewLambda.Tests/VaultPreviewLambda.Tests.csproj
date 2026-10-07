@@ -16,10 +16,14 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/VaultPreviewLambda/VaultPreviewLambda.csproj" />
+    <ProjectReference Include="../../src/CharacterDataLambda/CharacterDataLambda.csproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="../../contracts/v1/fixtures/legacy-flat-response-full.json"
           Link="Fixtures/legacy-flat-response-full.json"
+          CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../contracts/v1/fixtures/*.json"
+          Link="Fixtures/Contract/%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

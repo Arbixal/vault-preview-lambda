@@ -26,6 +26,7 @@ public class Function
     private readonly IActiveSeasonRevisionProvider _activeSeasonRevisionProvider;
     private readonly ISeasonRevisionProvider? _seasonRevisionProvider;
     private readonly VersionedProgressService? _versionedProgressService;
+    private readonly IApiTelemetry _apiTelemetry;
 
     private const string _CONFIG_CACHE_CONTROL = "public, max-age=60, stale-while-revalidate=300";
     private const string _PROGRESS_CACHE_CONTROL = "public, max-age=30, stale-while-revalidate=60";
@@ -36,8 +37,8 @@ public class Function
         IVaultCacheHandler vaultCacheHandler,
         IActiveSeasonRevisionProvider activeSeasonRevisionProvider,
         ISeasonRevisionProvider? seasonRevisionProvider = null,
-        VersionedProgressService? versionedProgressService = null
-        )
+        VersionedProgressService? versionedProgressService = null,
+        IApiTelemetry? apiTelemetry = null)
     {
         _blizzardApiHandler = blizzardApiHandler;
         _raiderIoHandler = raiderIoHandler;
@@ -45,6 +46,7 @@ public class Function
         _activeSeasonRevisionProvider = activeSeasonRevisionProvider;
         _seasonRevisionProvider = seasonRevisionProvider;
         _versionedProgressService = versionedProgressService;
+        _apiTelemetry = apiTelemetry ?? new ConsoleApiTelemetry();
     }
 
     [LambdaFunction]
@@ -55,11 +57,18 @@ public class Function
     {
         if (_seasonRevisionProvider == null)
         {
-            return _createError(
+            IHttpResult result = _createError(
                 HttpStatusCode.ServiceUnavailable,
                 "ACTIVE_CONFIGURATION_UNAVAILABLE",
                 "Active application configuration is unavailable.",
                 origin);
+            _recordTelemetry(new ApiTelemetryEvent(
+                "GET /v1/app-config",
+                "error",
+                (int)HttpStatusCode.ServiceUnavailable,
+                1,
+                FailureType: "configuration"));
+            return result;
         }
 
         try
@@ -67,32 +76,57 @@ public class Function
             SeasonRevision? revision = await _seasonRevisionProvider.GetActiveRevision();
             if (revision == null)
             {
-                return _createError(
+                IHttpResult result = _createError(
                     HttpStatusCode.ServiceUnavailable,
                     "ACTIVE_CONFIGURATION_UNAVAILABLE",
                     "Active application configuration is unavailable.",
                     origin);
+                _recordTelemetry(new ApiTelemetryEvent(
+                    "GET /v1/app-config",
+                    "error",
+                    (int)HttpStatusCode.ServiceUnavailable,
+                    1,
+                    FailureType: "configuration"));
+                return result;
             }
 
             string entityTag = _getRevisionEntityTag(revision);
             if (_matchesEntityTag(ifNoneMatch, entityTag))
             {
-                return _withHeaders(
+                IHttpResult result = _withHeaders(
                     HttpResults.NewResult(HttpStatusCode.NotModified, null),
                     origin,
                     _CONFIG_CACHE_CONTROL,
                     entityTag);
+                _recordTelemetry(new ApiTelemetryEvent(
+                    "GET /v1/app-config",
+                    "not_modified",
+                    (int)HttpStatusCode.NotModified,
+                    1,
+                    revision.Configuration.Id,
+                    revision.Id,
+                    revision.RevisionHash));
+                return result;
             }
 
             AppConfigResponse response = new()
             {
                 ActiveSeason = _toSeasonSnapshot(revision)
             };
-            return _withHeaders(
+            IHttpResult success = _withHeaders(
                 HttpResults.Ok(response),
                 origin,
                 _CONFIG_CACHE_CONTROL,
                 entityTag);
+            _recordTelemetry(new ApiTelemetryEvent(
+                "GET /v1/app-config",
+                "success",
+                (int)HttpStatusCode.OK,
+                response.SchemaVersion,
+                revision.Configuration.Id,
+                revision.Id,
+                revision.RevisionHash));
+            return success;
         }
         catch (OperationCanceledException)
         {
@@ -101,11 +135,18 @@ public class Function
         catch (Exception exception)
         {
             Console.WriteLine($"Unable to serve active application configuration: {exception.GetType().Name}");
-            return _createError(
+            IHttpResult result = _createError(
                 HttpStatusCode.ServiceUnavailable,
                 "ACTIVE_CONFIGURATION_UNAVAILABLE",
                 "Active application configuration is unavailable.",
                 origin);
+            _recordTelemetry(new ApiTelemetryEvent(
+                "GET /v1/app-config",
+                "error",
+                (int)HttpStatusCode.ServiceUnavailable,
+                1,
+                FailureType: "configuration"));
+            return result;
         }
     }
 
@@ -121,20 +162,34 @@ public class Function
     {
         if (!_isValidRequest(region, realm, character))
         {
-            return _createError(
+            IHttpResult result = _createError(
                 HttpStatusCode.BadRequest,
                 "INVALID_REQUEST",
                 "The request is invalid.",
                 origin);
+            _recordTelemetry(new ApiTelemetryEvent(
+                "GET /v1/vault-progress",
+                "error",
+                (int)HttpStatusCode.BadRequest,
+                1,
+                FailureType: "invalid_request"));
+            return result;
         }
 
         if (_versionedProgressService == null)
         {
-            return _createError(
+            IHttpResult result = _createError(
                 HttpStatusCode.ServiceUnavailable,
                 "ACTIVE_CONFIGURATION_UNAVAILABLE",
                 "Active application configuration is unavailable.",
                 origin);
+            _recordTelemetry(new ApiTelemetryEvent(
+                "GET /v1/vault-progress",
+                "error",
+                (int)HttpStatusCode.ServiceUnavailable,
+                1,
+                FailureType: "configuration"));
+            return result;
         }
 
         try
@@ -146,58 +201,124 @@ public class Function
                 readOnly: readOnly);
             if (response == null)
             {
-                return _createError(
+                IHttpResult result = _createError(
                     HttpStatusCode.ServiceUnavailable,
                     "ACTIVE_CONFIGURATION_UNAVAILABLE",
                     "Active application configuration is unavailable.",
                     origin);
+                _recordTelemetry(new ApiTelemetryEvent(
+                    "GET /v1/vault-progress",
+                    "error",
+                    (int)HttpStatusCode.ServiceUnavailable,
+                    1,
+                    FailureType: "configuration"));
+                return result;
             }
 
             string entityTag = _getResponseEntityTag(response);
             if (_matchesEntityTag(ifNoneMatch, entityTag))
             {
-                return _withHeaders(
+                IHttpResult result = _withHeaders(
                     HttpResults.NewResult(HttpStatusCode.NotModified, null),
                     origin,
                     _PROGRESS_CACHE_CONTROL,
                     entityTag);
+                _recordProgressTelemetry("not_modified", (int)HttpStatusCode.NotModified, response);
+                return result;
             }
 
-            return _withHeaders(
+            IHttpResult success = _withHeaders(
                 HttpResults.Ok(response),
                 origin,
                 _PROGRESS_CACHE_CONTROL,
                 entityTag);
+            _recordProgressTelemetry("success", (int)HttpStatusCode.OK, response);
+            return success;
         }
         catch (OperationCanceledException)
         {
             throw;
         }
-        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        catch (VersionedProgressCalculationException exception) when (
+            exception.InnerException is HttpRequestException { StatusCode: HttpStatusCode.NotFound })
         {
-            return _createError(
+            IHttpResult result = _createError(
                 HttpStatusCode.NotFound,
                 "CHARACTER_NOT_FOUND",
                 "Character data is not available.",
                 origin);
+            _recordProgressFailureTelemetry("character_not_found", (int)HttpStatusCode.NotFound, exception.Revision);
+            return result;
+        }
+        catch (VersionedProgressCalculationException exception) when (exception.InnerException is HttpRequestException)
+        {
+            Console.WriteLine(
+                $"Character progress upstream request failed: {exception.InnerException?.GetType().Name ?? exception.GetType().Name}");
+            IHttpResult result = _createError(
+                HttpStatusCode.ServiceUnavailable,
+                "UPSTREAM_UNAVAILABLE",
+                "Required upstream data is unavailable.",
+                origin);
+            _recordProgressFailureTelemetry("upstream", (int)HttpStatusCode.ServiceUnavailable, exception.Revision);
+            return result;
+        }
+        catch (VersionedProgressCalculationException exception)
+        {
+            Console.WriteLine($"Character progress calculation failed: {exception.InnerException?.GetType().Name}");
+            IHttpResult result = _createError(
+                HttpStatusCode.ServiceUnavailable,
+                "UPSTREAM_UNAVAILABLE",
+                "Required upstream data is unavailable.",
+                origin);
+            _recordProgressFailureTelemetry("calculation", (int)HttpStatusCode.ServiceUnavailable, exception.Revision);
+            return result;
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == HttpStatusCode.NotFound)
+        {
+            IHttpResult result = _createError(
+                HttpStatusCode.NotFound,
+                "CHARACTER_NOT_FOUND",
+                "Character data is not available.",
+                origin);
+            _recordTelemetry(new ApiTelemetryEvent(
+                "GET /v1/vault-progress",
+                "error",
+                (int)HttpStatusCode.NotFound,
+                1,
+                FailureType: "character_not_found"));
+            return result;
         }
         catch (HttpRequestException exception)
         {
             Console.WriteLine($"Character progress upstream request failed: {exception.GetType().Name}");
-            return _createError(
+            IHttpResult result = _createError(
                 HttpStatusCode.ServiceUnavailable,
                 "UPSTREAM_UNAVAILABLE",
                 "Required upstream data is unavailable.",
                 origin);
+            _recordTelemetry(new ApiTelemetryEvent(
+                "GET /v1/vault-progress",
+                "error",
+                (int)HttpStatusCode.ServiceUnavailable,
+                1,
+                FailureType: "upstream"));
+            return result;
         }
         catch (Exception exception)
         {
             Console.WriteLine($"Character progress calculation failed: {exception.GetType().Name}");
-            return _createError(
+            IHttpResult result = _createError(
                 HttpStatusCode.ServiceUnavailable,
                 "UPSTREAM_UNAVAILABLE",
                 "Required upstream data is unavailable.",
                 origin);
+            _recordTelemetry(new ApiTelemetryEvent(
+                "GET /v1/vault-progress",
+                "error",
+                (int)HttpStatusCode.ServiceUnavailable,
+                1,
+                FailureType: "calculation"));
+            return result;
         }
     }
 
@@ -429,6 +550,60 @@ public class Function
             Revision = revision.Id,
             RevisionHash = revision.RevisionHash
         };
+    }
+
+    private void _recordProgressTelemetry(
+        string outcome,
+        int statusCode,
+        VaultProgressResponse response,
+        string? failureType = null)
+    {
+        string? freshness = response.Sections.Count == 0
+            ? null
+            : response.Sections.All(section => section.Freshness == "fresh")
+                ? "fresh"
+                : response.Sections.Any(section => section.Freshness == "stale")
+                    ? "stale"
+                    : "mixed";
+
+        _recordTelemetry(new ApiTelemetryEvent(
+            "GET /v1/vault-progress",
+            outcome,
+            statusCode,
+            response.SchemaVersion,
+            response.Season.Id,
+            response.Season.Revision,
+            response.Season.RevisionHash,
+            freshness,
+            failureType));
+    }
+
+    private void _recordProgressFailureTelemetry(
+        string failureType,
+        int statusCode,
+        SeasonRevision revision)
+    {
+        _recordTelemetry(new ApiTelemetryEvent(
+            "GET /v1/vault-progress",
+            "error",
+            statusCode,
+            1,
+            revision.Configuration.Id,
+            revision.Id,
+            revision.RevisionHash,
+            FailureType: failureType));
+    }
+
+    private void _recordTelemetry(ApiTelemetryEvent telemetryEvent)
+    {
+        try
+        {
+            _apiTelemetry.Record(telemetryEvent);
+        }
+        catch (Exception exception)
+        {
+            Console.WriteLine($"API telemetry failed: {exception.GetType().Name}");
+        }
     }
 
     private static IHttpResult _createError(

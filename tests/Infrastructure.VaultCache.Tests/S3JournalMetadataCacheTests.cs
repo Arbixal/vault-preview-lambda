@@ -28,4 +28,30 @@ public class S3JournalMetadataCacheTests
 
         Assert.False(S3JournalMetadataCache.IsValid(invalidEntry));
     }
+
+    [Fact]
+    public void Validation_RejectsCacheWindowLongerThanPolicy()
+    {
+        DateTimeOffset fetchedAt = DateTimeOffset.UtcNow;
+        JournalMetadataCacheEntry invalidEntry = new(
+            new BlizzardJournalInstance { Id = 40766, Name = "The Venomous Abyss" },
+            fetchedAt,
+            fetchedAt.AddHours(25),
+            fetchedAt.AddDays(7));
+
+        Assert.False(S3JournalMetadataCache.IsValid(invalidEntry));
+    }
+
+    [Fact]
+    public void Validation_RejectsStaleWindowLongerThanSevenDays()
+    {
+        DateTimeOffset fetchedAt = DateTimeOffset.UtcNow;
+        JournalMetadataCacheEntry invalidEntry = new(
+            new BlizzardJournalInstance { Id = 40766, Name = "The Venomous Abyss" },
+            fetchedAt,
+            fetchedAt.AddHours(24),
+            fetchedAt.AddDays(8));
+
+        Assert.False(S3JournalMetadataCache.IsValid(invalidEntry));
+    }
 }
