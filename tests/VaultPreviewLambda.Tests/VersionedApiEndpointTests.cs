@@ -20,7 +20,8 @@ public class VersionedApiEndpointTests
     public async Task GetAppConfig_ReturnsActiveSeasonSnapshot()
     {
         SeasonRevision revision = SeasonRevision.Create("future-r1", _createConfiguration());
-        Function function = _createFunction(revision);
+        RecordingApiTelemetry telemetry = new();
+        Function function = _createFunction(revision, telemetry: telemetry);
 
         IHttpResult result = await function.GetAppConfig(string.Empty, "http://localhost:3000");
 
@@ -35,6 +36,13 @@ public class VersionedApiEndpointTests
         Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal("future-season", root.GetProperty("activeSeason").GetProperty("id").GetString());
         Assert.Equal("future-r1", root.GetProperty("activeSeason").GetProperty("revision").GetString());
+        Assert.Equal(
+            revision.RevisionHash,
+            root.GetProperty("activeSeason").GetProperty("revisionHash").GetString());
+        Assert.Single(telemetry.Events);
+        Assert.Equal("GET /v1/app-config", telemetry.Events[0].Route);
+        Assert.Equal("success", telemetry.Events[0].Outcome);
+        Assert.Equal(revision.RevisionHash, telemetry.Events[0].RevisionHash);
     }
 
     [Fact]
@@ -56,11 +64,13 @@ public class VersionedApiEndpointTests
     [Fact]
     public async Task GetAppConfig_ReturnsStructuredUnavailableStatusWhenProviderIsMissing()
     {
+        RecordingApiTelemetry telemetry = new();
         Function function = new(
             new FakeBlizzardApiHandler(),
             new FakeRaiderIoHandler(),
             new FakeVaultCacheHandler(),
-            new FakeActiveSeasonRevisionProvider());
+            new FakeActiveSeasonRevisionProvider(),
+            apiTelemetry: telemetry);
 
         IHttpResult result = await function.GetAppConfig(string.Empty, "http://localhost:3000");
 
@@ -71,6 +81,8 @@ public class VersionedApiEndpointTests
         Assert.Equal(
             "ACTIVE_CONFIGURATION_UNAVAILABLE",
             body.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Single(telemetry.Events);
+        Assert.Equal("configuration", telemetry.Events[0].FailureType);
     }
 
     [Fact]
@@ -124,6 +136,101 @@ public class VersionedApiEndpointTests
     }
 
     [Fact]
+    public async Task GetVaultProgress_ReportsStaleJournalFreshness()
+    {
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        SeasonRevision revision = SeasonRevision.Create("future-r1", _createRaidConfiguration());
+        RecordingApiTelemetry telemetry = new();
+        Function function = _createFunction(
+            revision,
+            new FakeBlizzardApiHandler(
+                journalMetadata: new Dictionary<long, BlizzardJournalMetadata>
+                {
+                    [1320] = new BlizzardJournalMetadata(
+                        new BlizzardJournalInstance { Id = 1320, Name = "Cached Raid" },
+                        true,
+                        now.AddDays(-2),
+                        now.AddHours(-1),
+                        now.AddDays(2))
+                }),
+            telemetry: telemetry);
+
+        SerializedHttpResponse response = _serialize(await function.GetVaultProgress(
+            "us",
+            "realm",
+            "character",
+            string.Empty,
+            "http://localhost:3000"));
+
+        using JsonDocument body = _readBody(response);
+        JsonElement section = body.RootElement.GetProperty("sections")[0];
+        Assert.Equal("available", section.GetProperty("status").GetString());
+        Assert.Equal("stale", section.GetProperty("freshness").GetString());
+        Assert.Single(telemetry.Events);
+        Assert.Equal("stale", telemetry.Events[0].Freshness);
+    }
+
+    [Fact]
+    public async Task GetVaultProgress_ReturnsNotModifiedForMatchingResponseEntityTagAndRecordsRevisionTelemetry()
+    {
+        SeasonRevision revision = SeasonRevision.Create("future-r1", _createConfiguration());
+        RecordingApiTelemetry telemetry = new();
+        Function function = _createFunction(revision, telemetry: telemetry);
+
+        SerializedHttpResponse firstResponse = _serialize(await function.GetVaultProgress(
+            "us",
+            "realm",
+            "character",
+            string.Empty,
+            "http://localhost:3000"));
+        SerializedHttpResponse secondResponse = _serialize(await function.GetVaultProgress(
+            "us",
+            "realm",
+            "character",
+            firstResponse.Headers["etag"],
+            "http://localhost:3000"));
+
+        Assert.Equal(HttpStatusCode.NotModified, secondResponse.StatusCode);
+        Assert.Equal(firstResponse.Headers["etag"], secondResponse.Headers["etag"]);
+        Assert.Equal(2, telemetry.Events.Count);
+        Assert.Equal("success", telemetry.Events[0].Outcome);
+        Assert.Equal("not_modified", telemetry.Events[1].Outcome);
+        Assert.All(telemetry.Events, recordedEvent =>
+        {
+            Assert.Equal("GET /v1/vault-progress", recordedEvent.Route);
+            Assert.Equal(revision.Configuration.Id, recordedEvent.SeasonId);
+            Assert.Equal(revision.Id, recordedEvent.Revision);
+            Assert.Equal(revision.RevisionHash, recordedEvent.RevisionHash);
+            Assert.Equal(1, recordedEvent.SchemaVersion);
+        });
+    }
+
+    [Fact]
+    public async Task GetVaultProgress_RecordsCharacterNotFoundTelemetryWithoutCharacterData()
+    {
+        SeasonRevision revision = SeasonRevision.Create("future-r1", _createDelveConfiguration());
+        RecordingApiTelemetry telemetry = new();
+        Function function = _createFunction(
+            revision,
+            new FakeBlizzardApiHandler(HttpStatusCode.NotFound),
+            telemetry: telemetry);
+
+        SerializedHttpResponse response = _serialize(await function.GetVaultProgress(
+            "us",
+            "realm",
+            "character",
+            string.Empty,
+            "http://localhost:3000"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Single(telemetry.Events);
+        Assert.Equal("character_not_found", telemetry.Events[0].FailureType);
+        string serializedTelemetry = JsonSerializer.Serialize(telemetry.Events[0]);
+        Assert.DoesNotContain("\"Name\"", serializedTelemetry, StringComparison.Ordinal);
+        Assert.DoesNotContain("realm", serializedTelemetry, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task GetVaultProgress_ReadOnlyDoesNotSaveDelveBaseline()
     {
         SeasonRevision revision = SeasonRevision.Create("future-r1", _createDelveConfiguration());
@@ -169,9 +276,11 @@ public class VersionedApiEndpointTests
     public async Task GetVaultProgress_ReturnsStructuredUpstreamError()
     {
         SeasonRevision revision = SeasonRevision.Create("future-r1", _createDelveConfiguration());
+        RecordingApiTelemetry telemetry = new();
         Function function = _createFunction(
             revision,
-            new FakeBlizzardApiHandler(HttpStatusCode.BadGateway));
+            new FakeBlizzardApiHandler(HttpStatusCode.BadGateway),
+            telemetry: telemetry);
 
         SerializedHttpResponse response = _serialize(await function.GetVaultProgress(
             "us",
@@ -183,6 +292,30 @@ public class VersionedApiEndpointTests
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         using JsonDocument body = _readBody(response);
         Assert.Equal("UPSTREAM_UNAVAILABLE", body.RootElement.GetProperty("error").GetProperty("code").GetString());
+        Assert.Single(telemetry.Events);
+        Assert.Equal("upstream", telemetry.Events[0].FailureType);
+    }
+
+    [Fact]
+    public async Task GetVaultProgress_RecordsCalculationFailureTelemetry()
+    {
+        SeasonRevision revision = SeasonRevision.Create("future-r1", _createRaidConfiguration());
+        RecordingApiTelemetry telemetry = new();
+        Function function = _createFunction(
+            revision,
+            new FakeBlizzardApiHandler(exception: new InvalidOperationException("calculation test")),
+            telemetry: telemetry);
+
+        SerializedHttpResponse response = _serialize(await function.GetVaultProgress(
+            "us",
+            "realm",
+            "character",
+            string.Empty,
+            "http://localhost:3000"));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Single(telemetry.Events);
+        Assert.Equal("calculation", telemetry.Events[0].FailureType);
     }
 
     [Fact]
@@ -203,7 +336,8 @@ public class VersionedApiEndpointTests
     private static Function _createFunction(
         SeasonRevision revision,
         FakeBlizzardApiHandler? blizzard = null,
-        FakeDelveBaselineProvider? baselineProvider = null)
+        FakeDelveBaselineProvider? baselineProvider = null,
+        RecordingApiTelemetry? telemetry = null)
     {
         blizzard ??= new FakeBlizzardApiHandler();
         baselineProvider ??= new FakeDelveBaselineProvider();
@@ -219,7 +353,8 @@ public class VersionedApiEndpointTests
                 new BlizzardJournalMetadataProvider(blizzard),
                 new VaultProgressCalculator(),
                 new FakeSeasonRevisionProvider(revision),
-                baselineProvider));
+                baselineProvider),
+            telemetry);
     }
 
     private static SeasonConfiguration _createConfiguration()
@@ -281,6 +416,29 @@ public class VersionedApiEndpointTests
             ]);
     }
 
+    private static SeasonConfiguration _createRaidConfiguration() => new(
+        "future-season",
+        "Future Season",
+        "Future",
+        "Future Expansion",
+        null,
+        [
+            new SeasonActivityDefinition(
+                "raid",
+                "raid",
+                "Raids",
+                null,
+                0,
+                [new SeasonSlotDefinition(
+                    "raid-slot-1",
+                    "bosses",
+                    1,
+                    "1 boss",
+                    1,
+                    new SeasonRewardDefinition(500, "epic"))],
+                ["wow:journal-instance:1320"])
+        ]);
+
     private static SerializedHttpResponse _serialize(IHttpResult result)
     {
         using Stream stream = result.Serialize(new HttpResultSerializationOptions
@@ -323,6 +481,13 @@ public class VersionedApiEndpointTests
             Task.FromResult<ActiveSeasonRevision?>(null);
     }
 
+    private sealed class RecordingApiTelemetry : IApiTelemetry
+    {
+        public IList<ApiTelemetryEvent> Events { get; } = [];
+
+        public void Record(ApiTelemetryEvent telemetryEvent) => Events.Add(telemetryEvent);
+    }
+
     private sealed class FakeDelveBaselineProvider : ISeasonAwareDelveBaselineProvider
     {
         public int SaveCount { get; private set; }
@@ -345,21 +510,27 @@ public class VersionedApiEndpointTests
 
     private sealed class FakeBlizzardApiHandler(
         HttpStatusCode? statisticsStatusCode = null,
-        IReadOnlyDictionary<int, int>? delveStatistics = null) : IBlizzardApiHandler
+        IReadOnlyDictionary<int, int>? delveStatistics = null,
+        IReadOnlyDictionary<long, BlizzardJournalMetadata>? journalMetadata = null,
+        Exception? exception = null) : IBlizzardApiHandler
     {
         private readonly IReadOnlyDictionary<int, int> _delveStatistics =
             delveStatistics ?? new Dictionary<int, int>();
+        private readonly IReadOnlyDictionary<long, BlizzardJournalMetadata> _journalMetadata =
+            journalMetadata ?? new Dictionary<long, BlizzardJournalMetadata>();
 
         public Task Connect() => Task.CompletedTask;
 
         public Task<BlizzardEncounterResponse> GetEncounters(string region, string realm, string character) =>
-            Task.FromResult(new BlizzardEncounterResponse());
+            exception == null
+                ? Task.FromResult(new BlizzardEncounterResponse())
+                : Task.FromException<BlizzardEncounterResponse>(exception);
 
         public Task<BlizzardJournalMetadata?> GetJournalInstance(
             string region,
             long instanceId,
             CancellationToken cancellationToken = default) =>
-            Task.FromResult<BlizzardJournalMetadata?>(null);
+            Task.FromResult(_journalMetadata.GetValueOrDefault(instanceId));
 
         public Task<int?> GetSeason(string region) => Task.FromResult<int?>(null);
 

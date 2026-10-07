@@ -9,6 +9,8 @@ public sealed class S3JournalMetadataCache(IAmazonS3 s3Client) : IJournalMetadat
 {
     private const string _BUCKET_NAME = "vault-preview-data";
     private const string _KEY_FORMAT = "journal-metadata/v1/{0}/{1}/{2}.json";
+    private static readonly TimeSpan _MAX_CACHE_TTL = TimeSpan.FromHours(24);
+    private static readonly TimeSpan _MAX_STALE_WINDOW = TimeSpan.FromDays(7);
 
     public async Task<JournalMetadataCacheEntry?> Get(
         string region,
@@ -109,6 +111,8 @@ public sealed class S3JournalMetadataCache(IAmazonS3 s3Client) : IJournalMetadat
                entry.Instance.Id > 0 &&
                !string.IsNullOrWhiteSpace(entry.Instance.Name) &&
                entry.FetchedAt <= entry.ExpiresAt &&
-               entry.ExpiresAt <= entry.StaleUntil;
+               entry.ExpiresAt <= entry.StaleUntil &&
+               entry.ExpiresAt - entry.FetchedAt <= _MAX_CACHE_TTL &&
+               entry.StaleUntil - entry.FetchedAt <= _MAX_STALE_WINDOW;
     }
 }

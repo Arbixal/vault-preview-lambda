@@ -53,6 +53,8 @@ The API repository owns this schema. Shared fixtures and automated schema valida
 
 The API stores Blizzard Journal metadata in the existing `vault-preview-data` S3 bucket under `journal-metadata/v1/`. Entries are fresh for 24 hours and may be served as stale last-known-good metadata for up to seven days when Blizzard is unavailable.
 
+Versioned API requests emit one CloudWatch Embedded Metric Format event to Lambda logs. Events use route and outcome dimensions and include schema version, season ID, revision, revision hash, section freshness, status code, and stable failure categories without character names, credentials, or raw exception payloads. The `RequestCount` and `FailureCount` metrics are emitted in the `VaultPreview/API` namespace.
+
 The active season configuration uses the same bucket as its durable source of truth:
 
 - `season-config/v1/revisions/{seasonId}/{revision}.json` stores an immutable validated revision document.
