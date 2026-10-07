@@ -173,14 +173,14 @@ public class NormalizedProgressCalculatorTests
             }
         };
 
-        BlizzardInstance CreateInstance() => new()
+        BlizzardInstance CreateInstance(bool heroicCompleted) => new()
         {
             Instance = new BlizzardBase { Id = 1320 },
             Modes =
             [
                 CreateMode("lfr", "LFR", false),
                 CreateMode("normal", "Normal", false),
-                CreateMode("heroic", "Heroic", true)
+                CreateMode("heroic", "Heroic", heroicCompleted)
             ]
         };
 
@@ -195,8 +195,8 @@ public class NormalizedProgressCalculatorTests
             {
                 Expansions =
                 [
-                    new BlizzardExpansion { Instances = [CreateInstance()] },
-                    new BlizzardExpansion { Instances = [CreateInstance()] }
+                    new BlizzardExpansion { Instances = [CreateInstance(true)] },
+                    new BlizzardExpansion { Instances = [CreateInstance(false)] }
                 ]
             },
             [new BlizzardJournalMetadata(
@@ -220,6 +220,33 @@ public class NormalizedProgressCalculatorTests
         Assert.Equal(["LFR", "Normal", "Heroic", "Mythic"], dimensions.Select(x => x.Label));
         Assert.True(dimensions.Single(x => x.Id == "heroic").Completed);
         Assert.False(dimensions.Single(x => x.Id == "mythic").Completed);
+
+        VaultProgressResponse noModesResponse = await new VaultProgressCalculator().Calculate(
+            "us",
+            "nagrand",
+            "bixposter",
+            revision,
+            resetAt,
+            DateTimeOffset.UtcNow,
+            new BlizzardEncounterResponse(),
+            [new BlizzardJournalMetadata(
+                new BlizzardJournalInstance
+                {
+                    Id = 1320,
+                    Name = "The Venomous Abyss",
+                    Encounters = [new BlizzardJournalEncounter { Id = 2888, Name = "Nek'zali the Soulcoiler" }]
+                },
+                false,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow.AddDays(1),
+                DateTimeOffset.UtcNow.AddDays(7))],
+            null,
+            null,
+            new FakeDelveBaselineProvider(null));
+
+        ProgressItem noModesItem = noModesResponse.Sections[0].Slots[0].Items[0];
+        Assert.Equal("unknown", noModesItem.State);
+        Assert.Empty(noModesItem.Progress!.Dimensions);
     }
 
     [Fact]

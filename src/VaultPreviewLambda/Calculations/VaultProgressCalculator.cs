@@ -419,6 +419,9 @@ public sealed class VaultProgressCalculator
         long encounterId,
         DateTimeOffset resetAt)
     {
+        if (modes.Count == 0)
+            return [];
+
         Dictionary<string, List<BlizzardMode>> modesByDifficulty = modes
             .Select((mode, index) => new { mode, id = _getDifficultyId(mode, index) })
             .GroupBy(x => x.id, StringComparer.OrdinalIgnoreCase)
