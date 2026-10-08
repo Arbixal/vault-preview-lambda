@@ -7,23 +7,38 @@ namespace VaultPreviewLambda.Tests;
 public class ContractFixtureTests
 {
     private static readonly JsonSerializerOptions _serializerOptions = new(JsonSerializerDefaults.Web);
+    private static readonly string[] _requiredFixtureNames =
+    [
+        "app-config",
+        "current-season",
+        "empty-progress",
+        "partial-progress",
+        "unavailable-section",
+        "stale-metadata",
+        "unknown-activity-kind",
+        "future-season",
+        "legacy-flat-response-minimal",
+        "legacy-flat-response-full"
+    ];
 
     [Fact]
     public void ManifestFixturesHaveTheExpectedVersionedResponseShape()
     {
         string fixtureDirectory = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Contract");
         using JsonDocument manifest = _read(fixtureDirectory, "manifest.json");
+        HashSet<string> fixtureNames = [];
 
         foreach (JsonElement fixture in manifest.RootElement.GetProperty("fixtures").EnumerateArray())
         {
             string name = fixture.GetProperty("name").GetString()!;
+            fixtureNames.Add(name);
             string path = fixture.GetProperty("path").GetString()!;
             string responseType = fixture.GetProperty("responseType").GetString()!;
             using JsonDocument document = _read(fixtureDirectory, path);
 
             if (responseType == "LegacyProgressResponse")
             {
-                Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind);
+                _assertLegacyResponse(document.RootElement);
                 continue;
             }
 
@@ -52,6 +67,23 @@ public class ContractFixtureTests
             Assert.Equal(characterResponse.Season.Id, root.GetProperty("season").GetProperty("id").GetString());
             Assert.Equal(characterResponse.Sections.Count, root.GetProperty("sections").GetArrayLength());
         }
+
+        Assert.All(_requiredFixtureNames, name => Assert.Contains(name, fixtureNames));
+    }
+
+    private static void _assertLegacyResponse(JsonElement root)
+    {
+        Assert.Equal(JsonValueKind.Object, root.ValueKind);
+        Assert.True(root.TryGetProperty("bixposter-nagrand", out JsonElement character));
+        Assert.Equal(JsonValueKind.Object, character.ValueKind);
+        Assert.True(character.TryGetProperty("raid", out JsonElement raid));
+        Assert.Equal(JsonValueKind.Object, raid.ValueKind);
+        Assert.True(character.TryGetProperty("dungeons", out JsonElement dungeons));
+        Assert.Equal(JsonValueKind.Array, dungeons.ValueKind);
+        Assert.True(character.TryGetProperty("delves", out JsonElement delves));
+        Assert.Equal(JsonValueKind.Object, delves.ValueKind);
+        Assert.True(character.TryGetProperty("season", out JsonElement season));
+        Assert.Equal(JsonValueKind.Number, season.ValueKind);
     }
 
     private static void _assertCharacterResponse(JsonElement root)
