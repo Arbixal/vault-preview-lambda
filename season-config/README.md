@@ -122,6 +122,8 @@ The item levels in this example are illustrative configuration values showing th
 
 `definitions/midnight-s2/midnight-s2-r1.json` is the approved current-season workflow smoke-test definition. Its season and Journal source IDs come from the current Season 2 fixtures; its 318 item-level mappings mirror the fixture baseline. It is not active until it has been published and activated through the delivery workflow.
 
+`definitions/midnight-s2/midnight-s2-r3.json` adds the Season 2 mid-season raid `The Unbinding of Kith'ix` through the `wow:journal-instance:1324` source. Journal metadata supplies its `Kith'ix` encounter (`wow:journal-encounter:2896`); the definition does not duplicate encounter data.
+
 ## Generated Revision Artifact
 
 The CLI converts a source file into:

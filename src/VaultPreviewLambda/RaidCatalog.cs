@@ -126,6 +126,12 @@ internal static class RaidCatalog
             new(2895, "ula'tek")
         ]);
 
+    private static readonly RaidDefinition TheUnbindingOfKithix = new(
+        1324,
+        [
+            new(2896, "kith'ix")
+        ]);
+
     public static IReadOnlyDictionary<int, RaidSeasonDefinition> Seasons { get; } =
         new Dictionary<int, RaidSeasonDefinition>
         {
@@ -138,6 +144,6 @@ internal static class RaidCatalog
             [15] = new RaidSeasonDefinition([ManaforgeOmega]),
             [16] = new RaidSeasonDefinition([TheVoidspire, TheDreamrift]),
             [17] = new RaidSeasonDefinition([TheVenomousAbyss]),
-            [18] = new RaidSeasonDefinition([TheVenomousAbyss, TheTideboundGrotto])
+            [18] = new RaidSeasonDefinition([TheVenomousAbyss, TheTideboundGrotto, TheUnbindingOfKithix])
         };
 }
