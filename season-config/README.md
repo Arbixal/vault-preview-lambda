@@ -205,7 +205,7 @@ The GitHub Actions delivery is split into focused workflows:
 The five mutating workflows call `.github/workflows/season-config-operation.yml` for their shared implementation. Each operation must be dispatched from `master`, uses the protected GitHub `production` environment, and requires environment approval before AWS authentication. They share the existing configuration-delivery role and a non-canceling concurrency queue, so operations remain serialized across workflows.
 
 The operator procedure is documented in [`RUNBOOK.md`](RUNBOOK.md). The
-production smoke check is [`smoke-check.mjs`](smoke-check.mjs); it verifies
+production smoke check is the `SeasonConfigCli smoke` command; it verifies
 active app configuration, ETag revalidation, and matching character revision
 metadata through the progress endpoint's read-only mode without modifying AWS
 state or initializing a Delve baseline.

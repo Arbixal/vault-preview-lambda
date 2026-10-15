@@ -26,6 +26,9 @@ public static class Program
             return await new SeasonConfigurationCli(null).ValidateAsync(args[1]);
         }
 
+        if (command == "smoke")
+            return await _runSmokeCheckAsync();
+
         if (command != "cancel" && args.Length < 2)
         {
             Console.Error.WriteLine($"{command} is missing required arguments.");
@@ -99,6 +102,31 @@ public static class Program
         }
     }
 
+    private static async Task<int> _runSmokeCheckAsync()
+    {
+        try
+        {
+            ProductionSmokeCheckOptions options =
+                ProductionSmokeCheckOptions.FromEnvironment();
+            using HttpClient httpClient = new();
+            ProductionSmokeCheckResult result = await new ProductionSmokeCheck(httpClient)
+                .CheckAsync(options);
+            Console.WriteLine(
+                $"Smoke check passed: {result.SeasonId}/{result.RevisionId} " +
+                $"{result.RevisionHash} for {result.Region}/{result.Realm}/{result.Character}.");
+            return 0;
+        }
+        catch (Exception exception) when (
+            exception is ProductionSmokeCheckException or
+            ArgumentException or
+            HttpRequestException or
+            TaskCanceledException)
+        {
+            Console.Error.WriteLine($"Smoke check failed: {exception.Message}");
+            return 1;
+        }
+    }
+
     private static async Task<int> _parseTimestampAndExecute(
         string[] args,
         Func<string, string, DateTimeOffset?, CancellationToken, Task<int>> executor)
@@ -126,6 +154,7 @@ public static class Program
         Console.WriteLine();
         Console.WriteLine("Commands:");
         Console.WriteLine("  validate <source-file>                         Validate without AWS access");
+        Console.WriteLine("  smoke                                          Check the deployed API");
         Console.WriteLine("  publish <source-file> <season-id> <revision-id> Publish a revision to S3");
         Console.WriteLine("  activate <season-id> <revision-id> [at]        Activate through Lambda");
         Console.WriteLine("  schedule <season-id> <revision-id> <at>        Schedule one-time activation");

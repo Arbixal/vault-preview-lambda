@@ -13,7 +13,7 @@ Before a live operation, confirm:
 - The protected GitHub `production` environment has `SEASON_CONFIG_AWS_ROLE_TO_ASSUME` configured as a variable containing the dedicated role ARN, plus the T19 stack outputs documented in [`README.md`](README.md).
 - The API deployment has completed before production smoke checks are attempted.
 - A known, valid character is available for the progress smoke check.
-- Node.js 18 or newer is available for the production smoke script.
+- The .NET 10 SDK or newer is available for the production smoke command.
 - Any existing pending schedule is understood before publishing a new schedule.
 
 The live workflows require a production-environment approval and reject dispatches
@@ -158,11 +158,15 @@ export VAULT_PREVIEW_EXPECTED_SEASON_ID="midnight-s2"
 export VAULT_PREVIEW_EXPECTED_REVISION_ID="midnight-s2-r1"
 export VAULT_PREVIEW_EXPECTED_REVISION_HASH="sha256:<hash-from-publish-run>"
 
-node season-config/smoke-check.mjs
+dotnet run \
+  --project src/SeasonConfigCli/SeasonConfigCli.csproj \
+  --configuration Release \
+  -- smoke
 ```
 
-The script uses only Node's built-in `fetch` and does not print character
-payloads or credentials. A non-zero exit code is a rollout failure.
+The command uses only .NET's built-in `HttpClient` and `System.Text.Json`; it
+does not print character payloads or credentials. A non-zero exit code is a
+rollout failure.
 
 ## Failure Recovery
 
