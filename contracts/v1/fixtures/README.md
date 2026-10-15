@@ -10,6 +10,7 @@ These fixtures are API-owned examples for the `contracts/v1/openapi.yaml` contra
 - Use `manifest.json` to discover fixture names, response types, and intended coverage.
 - API tests should load the files from the checked-out repository or a pinned artifact.
 - Frontend tests should consume the same files through the pinned fetch command below rather than maintaining a second copy.
+- The API test project validates every manifest fixture against `contracts/v1/openapi.yaml` using its .NET JSON Schema validator.
 
 ## Pinned Fetch
 

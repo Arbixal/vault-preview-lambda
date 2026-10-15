@@ -55,6 +55,12 @@
         "heroic": true,
         "normal": false,
         "lfr": false
+      },
+      "kith'ix": {
+        "mythic": false,
+        "heroic": false,
+        "normal": false,
+        "lfr": false
       }
     },
     "dungeons": [

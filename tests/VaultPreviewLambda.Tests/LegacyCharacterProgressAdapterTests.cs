@@ -28,7 +28,8 @@ public class LegacyCharacterProgressAdapterTests
             ["the-twin-fangs"] = 2887,
             ["the-coiled-altar"] = 2883,
             ["ula'tek"] = 2895,
-            ["nymrissa-wavecaller"] = 2849
+            ["nymrissa-wavecaller"] = 2849,
+            ["kith'ix"] = 2896
         };
 
         List<ProgressItem> raidItems = expectedCharacter.Raid
@@ -188,7 +189,7 @@ public class LegacyCharacterProgressAdapterTests
 
         Assert.Equal("shaman", result.PlayerClass);
         Assert.Equal(18, result.Season);
-        Assert.Equal(9, result.Raid.Count);
+        Assert.Equal(10, result.Raid.Count);
         Assert.True(result.Raid["nek'zali-the-soulcoiler"]["heroic"]);
         Assert.DoesNotContain("world", result.Raid["nek'zali-the-soulcoiler"].Keys);
         Assert.Equal(8, result.Dungeons.Single().Level);

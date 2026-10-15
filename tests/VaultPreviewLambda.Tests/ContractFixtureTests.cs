@@ -20,6 +20,7 @@ public class ContractFixtureTests
             string path = fixture.GetProperty("path").GetString()!;
             string responseType = fixture.GetProperty("responseType").GetString()!;
             using JsonDocument document = _read(fixtureDirectory, path);
+            OpenApiContractValidator.AssertValid(document.RootElement.GetRawText(), responseType);
 
             if (responseType == "LegacyProgressResponse")
             {

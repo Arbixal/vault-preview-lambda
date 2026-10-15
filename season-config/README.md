@@ -122,6 +122,8 @@ The item levels in this example are illustrative configuration values showing th
 
 `definitions/midnight-s2/midnight-s2-r1.json` is the approved current-season workflow smoke-test definition. Its season and Journal source IDs come from the current Season 2 fixtures; its 318 item-level mappings mirror the fixture baseline. It is not active until it has been published and activated through the delivery workflow.
 
+`definitions/midnight-s2/midnight-s2-r3.json` adds the Season 2 mid-season raid `The Unbinding of Kith'ix` through the `wow:journal-instance:1324` source. Journal metadata supplies its `Kith'ix` encounter (`wow:journal-encounter:2896`); the definition does not duplicate encounter data.
+
 ## Generated Revision Artifact
 
 The CLI converts a source file into:
@@ -203,7 +205,7 @@ The GitHub Actions delivery is split into focused workflows:
 The five mutating workflows call `.github/workflows/season-config-operation.yml` for their shared implementation. Each operation must be dispatched from `master`, uses the protected GitHub `production` environment, and requires environment approval before AWS authentication. They share the existing configuration-delivery role and a non-canceling concurrency queue, so operations remain serialized across workflows.
 
 The operator procedure is documented in [`RUNBOOK.md`](RUNBOOK.md). The
-production smoke check is [`smoke-check.mjs`](smoke-check.mjs); it verifies
+production smoke check is the `SeasonConfigCli smoke` command; it verifies
 active app configuration, ETag revalidation, and matching character revision
 metadata through the progress endpoint's read-only mode without modifying AWS
 state or initializing a Delve baseline.
